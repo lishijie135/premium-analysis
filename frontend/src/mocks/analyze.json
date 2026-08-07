@@ -1,0 +1,126 @@
+{
+  "summary": {
+    "total_rows": 5200,
+    "valid_rows": 5123,
+    "invalid_rows": 45,
+    "duplicate_rows": 32,
+    "invalid_samples": [
+      { "row": 23, "reason": "日期无法解析", "raw": { "签单时间": "2026/13/40", "客户代码": "C099", "保费量": 1200, "出单量": 2 } },
+      { "row": 57, "reason": "保费量不是数字", "raw": { "签单时间": "2025-06", "客户代码": "C041", "保费量": "约一万", "出单量": 3 } },
+      { "row": 112, "reason": "客户代码为空", "raw": { "签单时间": "2025-11", "客户代码": "", "保费量": 860.5, "出单量": 1 } }
+    ],
+    "customer_count": 128,
+    "month_range": ["2024-01", "2026-07"]
+  },
+  "performance": {
+    "monthly": [
+      { "period": "2024-01", "premium": 320500.0, "policies": 82, "new_customers": 3, "active_customers": 54 },
+      { "period": "2024-02", "premium": 218000.0, "policies": 60, "new_customers": 2, "active_customers": 47 },
+      { "period": "2024-03", "premium": 356800.0, "policies": 91, "new_customers": 4, "active_customers": 58 },
+      { "period": "2024-04", "premium": 342100.0, "policies": 88, "new_customers": 2, "active_customers": 56 },
+      { "period": "2024-05", "premium": 368900.0, "policies": 95, "new_customers": 3, "active_customers": 60 },
+      { "period": "2024-06", "premium": 401200.0, "policies": 102, "new_customers": 5, "active_customers": 63 },
+      { "period": "2024-07", "premium": 388500.0, "policies": 98, "new_customers": 2, "active_customers": 61 },
+      { "period": "2024-08", "premium": 352700.0, "policies": 90, "new_customers": 3, "active_customers": 57 },
+      { "period": "2024-09", "premium": 410300.0, "policies": 105, "new_customers": 4, "active_customers": 65 },
+      { "period": "2024-10", "premium": 379600.0, "policies": 96, "new_customers": 2, "active_customers": 62 },
+      { "period": "2024-11", "premium": 425800.0, "policies": 108, "new_customers": 6, "active_customers": 68 },
+      { "period": "2024-12", "premium": 468200.0, "policies": 118, "new_customers": 5, "active_customers": 72 },
+      { "period": "2025-01", "premium": 355400.0, "policies": 89, "new_customers": 4, "active_customers": 58 },
+      { "period": "2025-02", "premium": 246800.0, "policies": 66, "new_customers": 2, "active_customers": 50 },
+      { "period": "2025-03", "premium": 402300.0, "policies": 100, "new_customers": 6, "active_customers": 64 },
+      { "period": "2025-04", "premium": 388700.0, "policies": 97, "new_customers": 3, "active_customers": 62 },
+      { "period": "2025-05", "premium": 415600.0, "policies": 104, "new_customers": 4, "active_customers": 66 },
+      { "period": "2025-06", "premium": 452900.0, "policies": 112, "new_customers": 5, "active_customers": 70 },
+      { "period": "2025-07", "premium": 431200.0, "policies": 107, "new_customers": 3, "active_customers": 67 },
+      { "period": "2025-08", "premium": 398400.0, "policies": 99, "new_customers": 4, "active_customers": 63 },
+      { "period": "2025-09", "premium": 462800.0, "policies": 115, "new_customers": 6, "active_customers": 72 },
+      { "period": "2025-10", "premium": 428500.0, "policies": 106, "new_customers": 3, "active_customers": 68 },
+      { "period": "2025-11", "premium": 481700.0, "policies": 119, "new_customers": 7, "active_customers": 75 },
+      { "period": "2025-12", "premium": 522600.0, "policies": 128, "new_customers": 6, "active_customers": 80 },
+      { "period": "2026-01", "premium": 398200.0, "policies": 96, "new_customers": 5, "active_customers": 63 },
+      { "period": "2026-02", "premium": 275400.0, "policies": 71, "new_customers": 3, "active_customers": 55 },
+      { "period": "2026-03", "premium": 441800.0, "policies": 108, "new_customers": 8, "active_customers": 70 },
+      { "period": "2026-04", "premium": 425300.0, "policies": 103, "new_customers": 4, "active_customers": 67 },
+      { "period": "2026-05", "premium": 438900.0, "policies": 106, "new_customers": 6, "active_customers": 69 },
+      { "period": "2026-06", "premium": 470600.0, "policies": 113, "new_customers": 7, "active_customers": 73 },
+      { "period": "2026-07", "premium": 452100.0, "policies": 109, "new_customers": 5, "active_customers": 71 }
+    ],
+    "quarterly": [
+      { "period": "2024-Q1", "premium": 895300.0, "policies": 233, "new_customers": 9, "active_customers": 53 },
+      { "period": "2024-Q2", "premium": 1112200.0, "policies": 285, "new_customers": 10, "active_customers": 58 },
+      { "period": "2024-Q3", "premium": 1151500.0, "policies": 293, "new_customers": 9, "active_customers": 60 },
+      { "period": "2024-Q4", "premium": 1273600.0, "policies": 322, "new_customers": 13, "active_customers": 67 },
+      { "period": "2025-Q1", "premium": 1004500.0, "policies": 255, "new_customers": 12, "active_customers": 57 },
+      { "period": "2025-Q2", "premium": 1257200.0, "policies": 313, "new_customers": 12, "active_customers": 66 },
+      { "period": "2025-Q3", "premium": 1292400.0, "policies": 321, "new_customers": 13, "active_customers": 67 },
+      { "period": "2025-Q4", "premium": 1432800.0, "policies": 353, "new_customers": 16, "active_customers": 74 },
+      { "period": "2026-Q1", "premium": 1115400.0, "policies": 275, "new_customers": 16, "active_customers": 63 },
+      { "period": "2026-Q2", "premium": 1334800.0, "policies": 322, "new_customers": 17, "active_customers": 70 },
+      { "period": "2026-Q3", "premium": 452100.0, "policies": 109, "new_customers": 5, "active_customers": 71 }
+    ],
+    "yearly": [
+      { "period": "2024", "premium": 4432600.0, "policies": 1133, "new_customers": 41, "active_customers": 62 },
+      { "period": "2025", "premium": 4986900.0, "policies": 1242, "new_customers": 53, "active_customers": 71 },
+      { "period": "2026", "premium": 2902300.0, "policies": 706, "new_customers": 38, "active_customers": 69 }
+    ],
+    "year_compare": {
+      "years": [2024, 2025, 2026],
+      "premium_by_year": {
+        "2024": [320500.0, 218000.0, 356800.0, 342100.0, 368900.0, 401200.0, 388500.0, 352700.0, 410300.0, 379600.0, 425800.0, 468200.0],
+        "2025": [355400.0, 246800.0, 402300.0, 388700.0, 415600.0, 452900.0, 431200.0, 398400.0, 462800.0, 428500.0, 481700.0, 522600.0],
+        "2026": [398200.0, 275400.0, 441800.0, 425300.0, 438900.0, 470600.0, 452100.0, null, null, null, null, null]
+      },
+      "policies_by_year": {
+        "2024": [82, 60, 91, 88, 95, 102, 98, 90, 105, 96, 108, 118],
+        "2025": [89, 66, 100, 97, 104, 112, 107, 99, 115, 106, 119, 128],
+        "2026": [96, 71, 108, 103, 106, 113, 109, null, null, null, null, null]
+      },
+      "yoy": [
+        { "year": 2025, "premium_change_pct": 12.5, "policies_change_pct": 9.6 },
+        { "year": 2026, "premium_change_pct": -2.4, "policies_change_pct": 1.8 }
+      ]
+    }
+  },
+  "anomalies": {
+    "A_premium_monthly_drop": [
+      { "customer": "C012", "months": ["2026-03", "2026-04", "2026-05", "2026-06"], "premiums": [86000.0, 61800.0, 40200.0, 21500.0], "monthly_change_pct": [null, -28.1, -35.0, -46.5] },
+      { "customer": "C045", "months": ["2026-04", "2026-05", "2026-06"], "premiums": [52000.0, 38500.0, 30100.0], "monthly_change_pct": [null, -26.0, -21.8] },
+      { "customer": "C078", "months": ["2025-11", "2025-12", "2026-01", "2026-02"], "premiums": [98000.0, 74300.0, 55600.0, 33800.0], "monthly_change_pct": [null, -24.2, -25.2, -39.2] }
+    ],
+    "B_volume_monthly_drop": [
+      { "customer": "C023", "months": ["2026-02", "2026-03", "2026-04", "2026-05"], "counts": [18, 12, 7, 3], "monthly_change_pct": [null, -33.3, -41.7, -57.1] },
+      { "customer": "C066", "months": ["2026-04", "2026-05", "2026-06"], "counts": [25, 16, 9], "monthly_change_pct": [null, -36.0, -43.8] }
+    ],
+    "C_inactive": [
+      { "customer": "C031", "last_month": "2026-02", "months_idle": 5 },
+      { "customer": "C057", "last_month": "2026-04", "months_idle": 3 },
+      { "customer": "C090", "last_month": "2025-12", "months_idle": 7 }
+    ],
+    "D_premium_yoy_drop": [
+      { "customer": "C008", "prev_year": 2025, "curr_year": 2026, "prev_premium": 186000.0, "curr_premium": 92400.0, "change_pct": -50.3, "prev_policies": 42, "curr_policies": 21 },
+      { "customer": "C041", "prev_year": 2025, "curr_year": 2026, "prev_premium": 96500.0, "curr_premium": 61800.0, "change_pct": -36.0, "prev_policies": 24, "curr_policies": 16 },
+      { "customer": "C102", "prev_year": 2025, "curr_year": 2026, "prev_premium": 74200.0, "curr_premium": 52300.0, "change_pct": -29.5, "prev_policies": 19, "curr_policies": 14 }
+    ],
+    "E_volume_yoy_drop": [
+      { "customer": "C017", "prev_year": 2025, "curr_year": 2026, "prev_policies": 38, "curr_policies": 17, "change_pct": -55.3, "prev_premium": 152300.0, "curr_premium": 70900.0 },
+      { "customer": "C064", "prev_year": 2025, "curr_year": 2026, "prev_policies": 29, "curr_policies": 18, "change_pct": -37.9, "prev_premium": 118600.0, "curr_premium": 80200.0 }
+    ]
+  },
+  "growth": {
+    "F_premium_yoy_growth": [
+      { "customer": "C005", "prev_year": 2025, "curr_year": 2026, "prev_premium": 210000.0, "curr_premium": 325600.0, "change_pct": 55.0, "prev_policies": 47, "curr_policies": 71 },
+      { "customer": "C039", "prev_year": 2025, "curr_year": 2026, "prev_premium": 96000.0, "curr_premium": 141200.0, "change_pct": 47.1, "prev_policies": 22, "curr_policies": 33 },
+      { "customer": "C083", "prev_year": 2025, "curr_year": 2026, "prev_premium": 68400.0, "curr_premium": 89900.0, "change_pct": 31.4, "prev_policies": 16, "curr_policies": 21 }
+    ],
+    "G_volume_yoy_growth": [
+      { "customer": "C011", "prev_year": 2025, "curr_year": 2026, "prev_policies": 26, "curr_policies": 48, "change_pct": 84.6, "prev_premium": 104000.0, "curr_premium": 187500.0 },
+      { "customer": "C058", "prev_year": 2025, "curr_year": 2026, "prev_policies": 19, "curr_policies": 30, "change_pct": 57.9, "prev_premium": 76300.0, "curr_premium": 118900.0 }
+    ],
+    "H_new_customers": [
+      { "customer": "C121", "year": 2026, "policies": 6, "premium": 52000.0, "monthly_growth": true, "monthly": [ { "month": "2026-01", "premium": 3000.0, "policies": 1 }, { "month": "2026-02", "premium": 6800.0, "policies": 1 }, { "month": "2026-03", "premium": 9500.0, "policies": 1 }, { "month": "2026-04", "premium": 10200.0, "policies": 1 }, { "month": "2026-05", "premium": 10800.0, "policies": 1 }, { "month": "2026-06", "premium": 11700.0, "policies": 1 } ] },
+      { "customer": "C122", "year": 2026, "policies": 4, "premium": 38600.0, "monthly_growth": false, "monthly": [ { "month": "2026-01", "premium": 15000.0, "policies": 2 }, { "month": "2026-03", "premium": 9600.0, "policies": 1 }, { "month": "2026-05", "premium": 14000.0, "policies": 1 } ] },
+      { "customer": "C128", "year": 2026, "policies": 1, "premium": 8800.0, "monthly_growth": null, "monthly": [ { "month": "2026-07", "premium": 8800.0, "policies": 1 } ] }
+    ]
+  }
+}

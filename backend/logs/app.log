@@ -1,0 +1,41 @@
+2026-08-07 15:06:49,491 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 15:08:48,922 [ERROR] anomaly_llm: LLM 配置缺失，请检查 backend/.env
+2026-08-07 15:08:50,983 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: nosuch
+2026-08-07 15:09:42,793 [ERROR] anomaly_llm: LLM 配置缺失，请检查 backend/.env
+2026-08-07 15:09:44,841 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: nosuch
+2026-08-07 15:19:09,729 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 15:20:43,032 [INFO] anomaly_llm: 开始 LLM 流式分析: session=d0a752e9142f454783d18f359891288c model=test-model csv_chars=19247
+2026-08-07 15:20:45,480 [ERROR] anomaly_llm: 模型服务连接失败: All connection attempts failed
+2026-08-07 15:20:47,542 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: nosuch
+2026-08-07 15:41:47,027 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 15:41:47,049 [INFO] httpx: HTTP Request: GET http://testserver/api/health "HTTP/1.1 200 OK"
+2026-08-07 15:41:47,059 [INFO] httpx: HTTP Request: POST http://testserver/api/upload "HTTP/1.1 400 Bad Request"
+2026-08-07 15:41:47,102 [INFO] httpx: HTTP Request: POST http://testserver/api/upload "HTTP/1.1 200 OK"
+2026-08-07 15:41:47,443 [INFO] httpx: HTTP Request: POST http://testserver/api/analyze "HTTP/1.1 200 OK"
+2026-08-07 15:41:47,477 [INFO] httpx: HTTP Request: POST http://testserver/api/analyze "HTTP/1.1 404 Not Found"
+2026-08-07 15:41:47,954 [INFO] httpx: HTTP Request: POST http://testserver/api/upload "HTTP/1.1 200 OK"
+2026-08-07 15:41:48,012 [INFO] httpx: HTTP Request: POST http://testserver/api/analyze "HTTP/1.1 400 Bad Request"
+2026-08-07 15:41:48,112 [INFO] httpx: HTTP Request: POST http://testserver/api/upload "HTTP/1.1 200 OK"
+2026-08-07 15:41:48,133 [INFO] httpx: HTTP Request: POST http://testserver/api/analyze "HTTP/1.1 200 OK"
+2026-08-07 15:48:49,302 [ERROR] anomaly_llm: LLM 配置缺失，请检查 backend/.env
+2026-08-07 15:49:44,882 [ERROR] anomaly_llm: LLM 配置缺失，请检查 backend/.env
+2026-08-07 15:54:23,944 [ERROR] anomaly_llm: LLM 配置缺失，请检查 backend/.env
+2026-08-07 15:55:50,125 [ERROR] anomaly_llm: LLM 配置缺失，请检查 backend/.env
+2026-08-07 16:02:36,055 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 16:04:09,649 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: 1cf391c2e7b5413795e4fb8724b41055
+2026-08-07 16:06:04,122 [WARNING] anomaly_llm: CSV 数据超长已截断: 原始长度=750736
+2026-08-07 16:06:04,125 [INFO] anomaly_llm: 开始 LLM 流式分析: session=76ec96b77a284f44bbcc3303c68c2d49 model=qwen-plus csv_chars=200000
+2026-08-07 16:06:32,273 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 16:09:07,214 [INFO] anomaly_llm: LLM 流式分析完成: session=76ec96b77a284f44bbcc3303c68c2d49
+2026-08-07 16:23:48,022 [WARNING] anomaly_llm: CSV 数据超长已截断: 原始长度=750736
+2026-08-07 16:23:48,027 [INFO] anomaly_llm: 开始 LLM 流式分析: session=737dd7aaf9c54e76927ddefd17a737d5 model=qwen-plus csv_chars=200000
+2026-08-07 16:24:15,938 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 16:28:49,882 [INFO] anomaly_llm: LLM 流式分析完成: session=737dd7aaf9c54e76927ddefd17a737d5
+2026-08-07 16:36:48,198 [WARNING] anomaly_llm: CSV 数据超长已截断: 原始长度=750736
+2026-08-07 16:36:48,307 [INFO] anomaly_llm: 开始 LLM 流式分析: session=f942034bcbf7454098866aa2b5a7618d model=qwen-plus csv_chars=200000
+2026-08-07 16:37:16,596 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 16:40:08,295 [INFO] anomaly_llm: LLM 流式分析完成: session=f942034bcbf7454098866aa2b5a7618d
+2026-08-07 16:55:11,835 [WARNING] anomaly_llm: CSV 数据超长已截断: 原始长度=750736
+2026-08-07 16:55:11,839 [INFO] anomaly_llm: 开始 LLM 流式分析: session=e042854f39e3415ba8c5595f477f15ea model=qwen-plus csv_chars=200000
+2026-08-07 16:55:40,103 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 17:02:19,636 [INFO] anomaly_llm: LLM 流式分析完成: session=e042854f39e3415ba8c5595f477f15ea

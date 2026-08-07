@@ -1,0 +1,22 @@
+INFO:     127.0.0.1:28563 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38775 - "POST /api/anomaly/stream HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:34099 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:21793 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44128 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1123 - "POST /api/anomaly/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5100 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8422 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32482 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7837 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50556 - "POST /api/anomaly/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7137 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42380 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53786 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3632 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5151 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1073 - "POST /api/anomaly/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35477 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1296 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3543 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51704 - "GET /api/anomaly/default-prompt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8340 - "POST /api/anomaly/stream HTTP/1.1" 200 OK
