@@ -27,8 +27,7 @@
     <el-alert v-if="errorMsg" type="error" :closable="true" :title="errorMsg" class="err-alert" @close="errorMsg = ''" />
 
     <!-- 规则配置面板（默认收起） -->
-    <el-collapse v-model="configActiveNames" class="rule-config-collapse">
-      <el-collapse-item title="规则配置" name="config">
+    <div v-if="!configCollapsed" class="rule-config-panel">
         <div v-loading="loadingRules" class="rule-config-body">
           <div v-if="!rulesConfig.length" class="no-rules">暂无规则配置</div>
           <el-table :data="rulesConfig" stripe border size="small">
@@ -91,8 +90,7 @@
             </el-button>
           </div>
         </div>
-      </el-collapse-item>
-    </el-collapse>
+    </div>
 
     <!-- 分析结果展示区 -->
     <div v-loading="analyzing" class="result-area">
@@ -197,7 +195,6 @@ const errorMsg = ref('')           // 错误信息
 const tables = ref([])             // 分析结果表数组 [{id, name, columns, rows, summary}]
 const activeTableId = ref('')      // 当前激活的表 Tab
 const configCollapsed = ref(true)  // 规则配置面板折叠状态（备用）
-const configActiveNames = ref([])  // el-collapse 绑定值
 const loadingRules = ref(false)    // 加载规则配置中
 const savingRules = ref(false)     // 保存规则配置中
 const rulesConfig = ref([])        // 规则配置列表
@@ -505,8 +502,8 @@ function exportAllExcel() {
 // ===================== 生命周期 =====================
 
 // 监听配置面板展开时自动加载规则配置
-watch(configActiveNames, (val) => {
-  if (val.includes('config') && !rulesConfig.value.length) {
+watch(configCollapsed, (val) => {
+  if (!val && !rulesConfig.value.length) {
     fetchRulesConfig()
   }
 })

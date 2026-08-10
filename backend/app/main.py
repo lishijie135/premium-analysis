@@ -9,6 +9,7 @@ from . import config
 from .logging_setup import setup_logging
 from .routers import analyze as analyze_router
 from .routers import anomaly_llm as anomaly_llm_router
+from .routers import chat_llm as chat_llm_router
 
 # 初始化统一日志（控制台 + logs/app.log，仅保留最近3天）
 setup_logging()
@@ -26,6 +27,8 @@ app.add_middleware(
 app.include_router(analyze_router.router, prefix="/api")
 # AI 异常分析（大模型提示词驱动 + SSE 流式输出）
 app.include_router(anomaly_llm_router.router, prefix="/api")
+# AI 智能对话（多轮对话 + SSE 流式输出）
+app.include_router(chat_llm_router.router, prefix="/api")
 
 
 @app.get("/api/health")

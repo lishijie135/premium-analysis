@@ -30,7 +30,7 @@
     <div style="display: flex; gap: calc(var(--fs-base) * 0.75); margin-top: calc(var(--fs-base) * 0.5)">
       <el-button @click="emit('back')">返回重新上传</el-button>
       <el-button type="primary" :loading="loading" :disabled="!canContinue" @click="confirm">
-        开始分析
+        下一步
       </el-button>
     </div>
   </div>

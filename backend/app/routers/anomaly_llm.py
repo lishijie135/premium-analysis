@@ -61,6 +61,24 @@ class SavePromptRequest(BaseModel):
     prompt: str  # 用户编辑的提示词内容
 
 
+class OptimizePromptRequest(BaseModel):
+    """POST /anomaly/optimize-prompt 请求体。"""
+
+    prompt: str  # 用户当前的提示词内容
+
+
+class CreateTemplateRequest(BaseModel):
+    """POST /anomaly/templates 请求体。"""
+    name: str
+    content: str
+
+
+class UpdateTemplateRequest(BaseModel):
+    """PUT /anomaly/templates/{id} 请求体。"""
+    name: Optional[str] = None
+    content: Optional[str] = None
+
+
 def _sse(payload: Dict) -> str:
     """构造一条 SSE 事件（data: {...}\\n\\n）。"""
     return "data: %s\n\n" % json.dumps(payload, ensure_ascii=False)
@@ -109,7 +127,9 @@ def _get_llm_config() -> Optional[Dict[str, str]]:
         max_tokens = int(max_tokens_raw)
     except (ValueError, TypeError):
         max_tokens = 8192
-    return {"base_url": base_url.rstrip("/"), "api_key": api_key, "model": model, "enable_thinking": enable_thinking, "max_tokens": max_tokens}
+    cfg = {"base_url": base_url.rstrip("/"), "api_key": api_key, "model": model, "enable_thinking": enable_thinking, "max_tokens": max_tokens}
+    logger.info("LLM 配置: model=%s, base_url=%s, enable_thinking=%s, max_tokens=%s", model, base_url.rstrip("/"), enable_thinking, max_tokens)
+    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -224,8 +244,7 @@ def _build_csv(df: pd.DataFrame, months: Optional[List[Tuple[int, int]]] = None,
     monthly_csv = _df_to_csv(filtered)
     logger.info("月度明细 CSV 字符数: %d", len(monthly_csv))
 
-    # 始终发送完整月度明细数据（不再自动降级为季度聚合）
-    # 注：_build_quarterly_csv 函数保留作为备用，如需恢复降级可在此处重新启用
+    # 始终发送完整月度明细数据，不做降级
     return monthly_csv, None
 
 
@@ -343,6 +362,108 @@ def save_prompt(req: SavePromptRequest):
         raise HTTPException(status_code=500, detail=f"保存失败: {str(exc)}")
 
 
+@router.post("/anomaly/optimize-prompt")
+async def optimize_prompt(req: OptimizePromptRequest):
+    """自动优化提示词：将用户提示词发送给 LLM，让其改进后返回。"""
+    cfg = _get_llm_config()
+    if not cfg:
+        raise HTTPException(status_code=503, detail=CONFIG_MISSING_MSG)
+
+    meta_prompt = (
+        "你是一个专业的 AI 提示词工程师。请优化以下数据分析提示词，使其更清晰、结构化、有效。\n"
+        "优化原则：\n"
+        "1. 保持原有分析目标不变\n"
+        "2. 改进结构和表述，使指令更清晰\n"
+        "3. 补充可能遗漏的重要分析维度\n"
+        "4. 确保输出格式要求明确\n"
+        "5. 保持中文\n\n"
+        "请直接返回优化后的提示词，不要添加任何解释说明。\n\n"
+        "--- 原始提示词 ---\n"
+        + req.prompt
+    )
+
+    messages = [
+        {"role": "system", "content": "你是专业的 AI 提示词工程师，擅长优化数据分析类提示词。"},
+        {"role": "user", "content": meta_prompt}
+    ]
+
+    payload = {
+        "model": cfg["model"],
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": cfg.get("max_tokens", 8192),
+    }
+    if cfg.get("enable_thinking"):
+        payload["enable_thinking"] = True
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"{cfg['base_url']}/chat/completions",
+                headers={"Authorization": f"Bearer {cfg['api_key']}", "Content-Type": "application/json"},
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            optimized = data["choices"][0]["message"]["content"]
+            logger.info("提示词自动优化完成: 原始长度=%d, 优化后长度=%d", len(req.prompt), len(optimized))
+            return {"prompt": optimized}
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=f"LLM 调用失败: {exc.response.text}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"优化提示词失败: {exc}")
+
+@router.get("/anomaly/templates")
+def list_templates():
+    """获取所有提示词模板列表。"""
+    return {"templates": prompt_store.list_templates()}
+
+
+@router.get("/anomaly/templates/{template_id}")
+def get_template(template_id: str):
+    """获取单个模板详情。"""
+    t = prompt_store.get_template(template_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    return t
+
+
+@router.post("/anomaly/templates")
+def create_template(req: CreateTemplateRequest):
+    """创建新提示词模板。"""
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="模板名称不能为空")
+    t = prompt_store.create_template(req.name.strip(), req.content)
+    return t
+
+
+@router.put("/anomaly/templates/{template_id}")
+def update_template(template_id: str, req: UpdateTemplateRequest):
+    """更新提示词模板。"""
+    t = prompt_store.update_template(template_id, name=req.name, content=req.content)
+    if t is None:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    return t
+
+
+@router.delete("/anomaly/templates/{template_id}")
+def delete_template(template_id: str):
+    """删除提示词模板。"""
+    ok = prompt_store.delete_template(template_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail="无法删除（模板不存在或只剩一个模板）")
+    return {"success": True}
+
+
+@router.post("/anomaly/templates/{template_id}/activate")
+def activate_template(template_id: str):
+    """设置当前激活的模板。"""
+    ok = prompt_store.set_active(template_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    return {"success": True}
+
+
 @router.post("/anomaly/stream")
 async def anomaly_stream(req: StreamRequest):
     """SSE 流式异常分析：聚合数据 + 用户提示词 → 大模型 → 逐块转发。"""
@@ -382,84 +503,45 @@ async def anomaly_stream(req: StreamRequest):
                 "content": "以下是数据：\n```csv\n%s\n```\n\n请根据规则输出分析结果" % csv_text,
             },
         ]
-        payload = {
-            "model": cfg["model"],
-            "messages": messages,
-            "stream": True,
-            "temperature": 0.2,
-            # DashScope qwen3.7-plus OpenAI 兼容接口：enable_thinking 控制是否开启思考过程
-            # 用户可在 backend/.env 中设置 LLM_ENABLE_THINKING=true 来开启
-            "enable_thinking": cfg["enable_thinking"],
-            "max_tokens": cfg["max_tokens"],
-        }
-        url = cfg["base_url"] + "/chat/completions"
-        headers = {
-            "Authorization": "Bearer %s" % cfg["api_key"],
-            "Content-Type": "application/json",
-        }
         logger.info(
-            "开始 LLM 流式分析: session=%s model=%s csv_chars=%d enable_thinking=%s max_tokens=%d",
-            req.session_id, cfg["model"], len(csv_text), cfg["enable_thinking"], cfg["max_tokens"],
+            "开始 LLM 流式分析 (OpenAI Compatible): session=%s model=%s csv_chars=%d max_tokens=%d",
+            req.session_id, cfg["model"], len(csv_text), cfg["max_tokens"],
         )
 
-        # 4. httpx 直连 OpenAI 兼容接口，逐块转发 delta
+        # 4. OpenAI 兼容接口流式调用
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(LLM_TIMEOUT_SECONDS)
-            ) as client:
+            payload = {
+                "model": cfg["model"],
+                "messages": messages,
+                "stream": True,
+                "temperature": 0.2,
+                "max_tokens": cfg["max_tokens"],
+            }
+            async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SECONDS) as client:
                 async with client.stream(
-                    "POST", url, headers=headers, json=payload
+                    "POST",
+                    f"{cfg['base_url']}/chat/completions",
+                    headers={"Authorization": f"Bearer {cfg['api_key']}", "Content-Type": "application/json"},
+                    json=payload,
                 ) as resp:
-                    if resp.status_code != 200:
-                        body = (await resp.aread()).decode("utf-8", errors="ignore")
-                        logger.error(
-                            "模型服务返回异常状态: HTTP %d body=%s",
-                            resp.status_code, body[:500],
-                        )
-                        yield _sse({
-                            "type": "error",
-                            "message": "模型服务调用失败（HTTP %d）：%s"
-                            % (resp.status_code, body[:500]),
-                        })
-                        return
-
-                    # 解析 OpenAI 兼容 SSE：data: {json} / data: [DONE]
+                    resp.raise_for_status()
                     async for line in resp.aiter_lines():
-                        line = line.strip()
-                        if not line or not line.startswith("data:"):
+                        if not line.startswith("data: "):
                             continue
-                        data = line[5:].strip()
-                        if data == "[DONE]":
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
                             break
                         try:
-                            chunk = json.loads(data)
-                        except json.JSONDecodeError:
-                            logger.warning("跳过无法解析的模型响应行: %s", data[:200])
+                            chunk = json.loads(data_str)
+                            delta = chunk["choices"][0].get("delta", {})
+                            delta_content = delta.get("content", "")
+                            if delta_content:
+                                yield _sse({"type": "delta", "content": delta_content})
+                        except (json.JSONDecodeError, KeyError, IndexError):
                             continue
-                        # 检测 DashScope 返回的 error 事件（HTTP 200 但 body 含 error）
-                        if "error" in chunk:
-                            err = chunk["error"]
-                            err_msg = err.get("message", "模型返回未知错误")
-                            logger.error("模型返回错误: %s", err_msg)
-                            yield _sse({"type": "error", "message": err_msg})
-                            return
-
-                        choices = chunk.get("choices") or []
-                        if not choices:
-                            continue
-                        delta = choices[0].get("delta") or {}
-                        content = delta.get("content")
-                        if content:
-                            yield _sse({"type": "delta", "content": content})
             yield _sse({"type": "done"})
             logger.info("LLM 流式分析完成: session=%s", req.session_id)
-        except httpx.TimeoutException:
-            logger.error("模型请求超时（%ds）: session=%s", int(LLM_TIMEOUT_SECONDS), req.session_id)
-            yield _sse({"type": "error", "message": "模型请求超时（%d秒），请稍后重试" % int(LLM_TIMEOUT_SECONDS)})
-        except httpx.HTTPError as exc:
-            logger.error("模型服务连接失败: %s", exc)
-            yield _sse({"type": "error", "message": "模型服务连接失败：%s" % exc})
-        except Exception:  # 兜底：任何未预期异常都转为 error 事件，避免连接静默断开
+        except Exception:
             logger.exception("LLM 流式分析发生未预期异常: session=%s", req.session_id)
             yield _sse({"type": "error", "message": "分析过程发生异常，请稍后重试"})
 

@@ -11,15 +11,55 @@
     />
 
     <template v-else>
-      <!-- 提示词编辑区：改规则只改提示词 -->
+      <!-- 提示词模板管理区 -->
       <div class="prompt-box">
-        <!-- 提示词编辑面板（条件渲染） -->
-        <div v-if="showPromptEditor" class="prompt-editor-panel" style="margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span style="font-weight: 600; font-size: 14px; color: #5f6368;">系统提示词</span>
-            <el-button type="success" size="small" :loading="loadingPrompt" :disabled="streaming || !prompt.trim()" @click="handleSavePrompt">
-              保存提示词
-            </el-button>
+        <!-- 区域1：模板标签栏 -->
+        <div class="template-tab-bar">
+          <div class="template-tabs">
+            <div
+              v-for="t in templates" :key="t.id"
+              class="template-tab"
+              :class="{ active: t.id === activeTemplateId }"
+              @click="switchTemplate(t.id)"
+              :title="t.name"
+            >
+              <span class="tab-name">{{ t.name }}</span>
+              <span
+                v-if="templates.length > 1"
+                class="tab-delete"
+                @click.stop="handleDeleteTemplate(t.id)"
+                title="删除模板"
+              >&times;</span>
+            </div>
+            <!-- 新建模板按钮 -->
+            <div class="template-tab template-tab-add" @click="showNewTemplateInput = true" title="新建模板">
+              <span class="tab-add-icon">+</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 新建模板输入行 -->
+        <div v-if="showNewTemplateInput" class="new-template-input-row">
+          <el-input v-model="newTemplateName" placeholder="输入模板名称" size="small" style="width: 200px;" @keyup.enter="handleCreateTemplate" />
+          <el-button type="success" size="small" @click="handleCreateTemplate" :loading="loadingPrompt">确认</el-button>
+          <el-button size="small" @click="showNewTemplateInput = false; newTemplateName = ''">取消</el-button>
+        </div>
+
+        <!-- 区域2：提示词编辑器（始终展开） -->
+        <div class="prompt-editor-panel">
+          <div class="editor-header">
+            <span class="editor-title">
+              编辑：{{ templates.find(t => t.id === activeTemplateId)?.name || '提示词' }}
+            </span>
+            <div class="editor-actions">
+              <el-button type="success" size="small" :loading="loadingPrompt" :disabled="streaming || !prompt.trim()" @click="handleSavePrompt">
+                保存提示词
+              </el-button>
+              <el-button type="warning" size="small" :loading="optimizingPrompt" :disabled="streaming || optimizingPrompt || !prompt.trim()" @click="handleOptimizePrompt">
+                <el-icon><MagicStick /></el-icon>
+                <span>一键优化</span>
+              </el-button>
+            </div>
           </div>
           <el-input
             v-model="prompt"
@@ -29,11 +69,13 @@
             :disabled="streaming || loadingPrompt"
             style="width: 100%;"
           />
-          <div style="margin-top: 4px; font-size: 12px; color: #9aa0a6;">
-            提示：修改提示词后，点击"保存提示词"将更新系统默认提示词。支持自定义分析维度、输出格式等。
+          <div class="editor-hint">
+            提示：修改提示词后，点击"保存提示词"将更新当前模板
           </div>
         </div>
-        <div class="btn-bar">
+
+        <!-- 区域3：开始分析按钮 -->
+        <div class="analyze-action-row">
           <el-button
             type="primary"
             :loading="loadingPrompt"
@@ -43,11 +85,7 @@
             {{ streaming ? '分析中…' : '开始分析' }}
           </el-button>
           <el-button v-if="streaming" type="danger" @click="stop">停止</el-button>
-          <el-button :disabled="streaming || loadingPrompt" @click="resetPrompt">重置提示词</el-button>
-          <el-button size="small" @click="showPromptEditor = !showPromptEditor">
-            {{ showPromptEditor ? "收起提示词" : "编辑提示词" }}
-          </el-button>
-          <span v-if="streaming" class="muted">正在流式生成，可实时查看下方结果</span>
+          <span v-if="streaming" class="muted" style="margin-left: 8px;">正在流式生成…</span>
         </div>
       </div>
 
@@ -79,11 +117,11 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Loading, MagicStick } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import html2canvas from 'html2canvas'
-import { getDefaultPrompt, isMockMode, savePrompt } from '../api/client'
+import { getDefaultPrompt, isMockMode, savePrompt, optimizePrompt, getTemplates, getTemplate, createTemplate, updateTemplate, deleteTemplate, activateTemplate } from '../api/client'
 
 const props = defineProps({
   sessionId: { type: String, default: '' },  // 上传后获得的会话 ID
@@ -103,9 +141,51 @@ const streaming = ref(false) // 是否正在流式输出
 const fullText = ref('') // 累积的 Markdown 原文
 const errorMsg = ref('') // 错误信息
 const showPromptEditor = ref(true) // 控制提示词编辑器显示/隐藏
+const optimizingPrompt = ref(false) // 提示词优化中
 let abortController = null // 用于"停止"按钮中断请求
 
-// 拉取默认提示词（失败时保留空并提示）
+// ---- 多模板管理状态 ----
+const templates = ref([]) // 模板列表 [{id, name, active}]
+const activeTemplateId = ref('') // 当前激活的模板 ID
+const editingTemplateId = ref('') // 正在编辑的模板 ID
+const newTemplateName = ref('') // 新建模板名称
+const showNewTemplateInput = ref(false) // 显示新建模板输入框
+const loadingTemplates = ref(false) // 模板列表加载中
+
+// 加载模板列表
+async function loadTemplates() {
+  loadingTemplates.value = true
+  try {
+    const res = await getTemplates()
+    templates.value = res.templates || []
+    const active = templates.value.find(t => t.active)
+    if (active) {
+      activeTemplateId.value = active.id
+      await loadActiveTemplate()
+    }
+  } catch (err) {
+    ElMessage.error('获取模板列表失败：' + (err.message || '未知错误'))
+  } finally {
+    loadingTemplates.value = false
+  }
+}
+
+// 加载当前激活模板的内容
+async function loadActiveTemplate() {
+  if (!activeTemplateId.value) return
+  loadingPrompt.value = true
+  try {
+    const t = await getTemplate(activeTemplateId.value)
+    prompt.value = t.content || ''
+    editingTemplateId.value = t.id
+  } catch (err) {
+    ElMessage.error('获取模板内容失败：' + (err.message || '未知错误'))
+  } finally {
+    loadingPrompt.value = false
+  }
+}
+
+// 拉取默认提示词（向后兼容）
 async function loadDefaultPrompt() {
   loadingPrompt.value = true
   try {
@@ -137,7 +217,7 @@ async function resetPrompt() {
   await loadDefaultPrompt()
 }
 
-/** 保存修改后的提示词 */
+/** 保存修改后的提示词到当前模板 */
 async function handleSavePrompt() {
   if (!prompt.value.trim()) {
     ElMessage.warning('提示词不能为空')
@@ -145,12 +225,94 @@ async function handleSavePrompt() {
   }
   loadingPrompt.value = true
   try {
-    await savePrompt(prompt.value)
-    ElMessage.success('提示词已保存')
+    if (editingTemplateId.value) {
+      // 更新现有模板
+      const t = templates.value.find(t => t.id === editingTemplateId.value)
+      await updateTemplate(editingTemplateId.value, t?.name || '未命名', prompt.value)
+      ElMessage.success('提示词已保存到当前模板')
+    } else {
+      // 向后兼容：保存到默认位置
+      await savePrompt(prompt.value)
+      ElMessage.success('提示词已保存')
+    }
+    await loadTemplates() // 刷新模板列表
   } catch (err) {
-    ElMessage.error('保存失败：' + (err.response?.data?.detail || err.message || '未知错误'))
+    ElMessage.error('保存失败：' + (err.message || '未知错误'))
   } finally {
     loadingPrompt.value = false
+  }
+}
+
+/** 切换到指定模板 */
+async function switchTemplate(templateId) {
+  if (templateId === activeTemplateId.value) return
+  try {
+    await activateTemplate(templateId)
+    activeTemplateId.value = templateId
+    editingTemplateId.value = templateId
+    await loadActiveTemplate()
+  } catch (err) {
+    ElMessage.error('切换模板失败：' + (err.message || '未知错误'))
+  }
+}
+
+/** 新建模板 */
+async function handleCreateTemplate() {
+  if (!newTemplateName.value.trim()) {
+    ElMessage.warning('请输入模板名称')
+    return
+  }
+  loadingPrompt.value = true
+  try {
+    const t = await createTemplate(newTemplateName.value.trim(), prompt.value)
+    templates.value.push({ id: t.id, name: t.name, active: false })
+    newTemplateName.value = ''
+    showNewTemplateInput.value = false
+    ElMessage.success('模板已创建')
+    await loadTemplates()
+  } catch (err) {
+    ElMessage.error('创建模板失败：' + (err.message || '未知错误'))
+  } finally {
+    loadingPrompt.value = false
+  }
+}
+
+/** 删除模板 */
+async function handleDeleteTemplate(templateId) {
+  if (templates.value.length <= 1) {
+    ElMessage.warning('至少保留一个模板')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('确定要删除此模板吗？', '确认删除', { type: 'warning' })
+    await deleteTemplate(templateId)
+    templates.value = templates.value.filter(t => t.id !== templateId)
+    if (templateId === activeTemplateId.value) {
+      await loadTemplates()
+    }
+    ElMessage.success('模板已删除')
+  } catch (err) {
+    if (err !== 'cancel') {
+      ElMessage.error('删除模板失败：' + (err.message || '未知错误'))
+    }
+  }
+}
+
+/** 自动优化提示词 */
+async function handleOptimizePrompt() {
+  if (!prompt.value.trim()) {
+    ElMessage.warning('请先输入提示词内容')
+    return
+  }
+  optimizingPrompt.value = true
+  try {
+    const res = await optimizePrompt(prompt.value)
+    prompt.value = res.prompt
+    ElMessage.success('提示词已自动优化')
+  } catch (err) {
+    ElMessage.error('优化失败：' + (err.message || '未知错误'))
+  } finally {
+    optimizingPrompt.value = false
   }
 }
 
@@ -452,7 +614,7 @@ async function downloadTablePng(tableEl, tableIndex) {
 // CSV/PNG 工具栏注入已移除
 
 onMounted(() => {
-  if (!mockMode) loadDefaultPrompt()
+  if (!mockMode) loadTemplates()
 })
 onBeforeUnmount(() => {
   // 离开页面时中断未完成的流式请求
@@ -463,6 +625,134 @@ onBeforeUnmount(() => {
 <style scoped>
 .ai-anomaly-panel {
   font-size: var(--fs-base);
+}
+
+/* ---- 模板标签栏 ---- */
+.template-tab-bar {
+  margin-bottom: 12px;
+}
+.template-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.template-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  background: #f5f5f5;
+  color: #5f6368;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+  max-width: 160px;
+  user-select: none;
+}
+.template-tab:hover {
+  background: #e8eaed;
+}
+.template-tab.active {
+  background: #1a73e8;
+  color: #fff;
+  border-color: #1a73e8;
+  font-weight: 600;
+}
+.template-tab.active:hover {
+  background: #1565c0;
+}
+.template-tab .tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+.template-tab .tab-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+/* hover 模板标签时，删除按钮淡入显示 */
+.template-tab:hover .tab-delete {
+  opacity: 0.7;
+}
+.template-tab .tab-delete:hover {
+  opacity: 1 !important;
+  background: rgba(217, 48, 49, 0.15);
+  color: #d93025;
+}
+.template-tab.active .tab-delete:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+/* ---- 新建模板输入行 ---- */
+.new-template-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+/* ---- 编辑器面板 ---- */
+.prompt-editor-panel {
+  margin-bottom: 16px;
+}
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.editor-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #5f6368;
+}
+.editor-actions {
+  display: flex;
+  gap: 8px;
+}
+.editor-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #9aa0a6;
+}
+
+/* ---- 操作按钮区域 ---- */
+.template-tab-add {
+  border-style: dashed;
+  background: transparent;
+  color: #9aa0a6;
+}
+.template-tab-add:hover {
+  border-color: #1a73e8;
+  color: #1a73e8;
+  background: rgba(26, 115, 232, 0.04);
+}
+.template-tab-add .tab-add-icon {
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+}
+.analyze-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
 }
 .ai-anomaly-panel .prompt-section {
   background: var(--bg-hover);
@@ -476,38 +766,80 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   padding: var(--spacing-lg);
   min-height: 200px;
-  font-size: var(--fs-base);
+  font-size: 14px;
   line-height: 1.8;
+  color: #202124;
+  word-break: break-word;
 }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  color: #1a73e8;
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+.md-body h1 { font-size: 20px; border-bottom: 2px solid #e8eaed; padding-bottom: 6px; }
+.md-body h2 { font-size: 18px; }
+.md-body h3 { font-size: 16px; }
+.md-body p { margin: 8px 0; }
+.md-body ul, .md-body ol { margin: 8px 0; padding-left: 24px; }
+.md-body li { margin: 4px 0; line-height: 1.7; }
 /* 表格样式 */
 .md-body table {
   width: 100%;
   border-collapse: collapse;
   margin: 12px 0;
-  border: 1px solid #dadce0;
-  font-size: 14px;
+  font-size: 13px;
 }
 .md-body th {
   background: #f8f9fa;
-  padding: 10px 12px;
+  padding: 8px 12px;
   font-weight: 600;
-  font-size: 13px;
-  color: #5f6368;
   border: 1px solid #dadce0;
   text-align: left;
+  color: #5f6368;
+  white-space: nowrap;
 }
 .md-body td {
-  padding: 8px 12px;
-  border: 1px solid #dadce0;
-  font-size: 14px;
-  color: #202124;
+  padding: 6px 12px;
+  border: 1px solid #e8eaed;
 }
 .md-body tr:nth-child(even) {
   background: #fafbfc;
 }
 .md-body tr:hover {
-  background: #e8f0fe;
+  background: #f0f4ff;
 }
+.md-body code {
+  background: #f1f3f4;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+.md-body pre {
+  background: #f6f8fa;
+  padding: 12px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+  border: 1px solid #e8eaed;
+}
+.md-body pre code {
+  background: none;
+  padding: 0;
+}
+.md-body blockquote {
+  border-left: 3px solid #1a73e8;
+  padding: 8px 12px;
+  color: #5f6368;
+  margin: 8px 0;
+  background: #f8f9fa;
+  border-radius: 0 4px 4px 0;
+}
+.md-body strong { color: #202124; font-weight: 600; }
+.md-body em { color: #5f6368; }
+.md-body hr { border: none; border-top: 1px solid #e8eaed; margin: 16px 0; }
+.md-body a { color: #1a73e8; text-decoration: none; }
+.md-body a:hover { text-decoration: underline; }
 .ai-anomaly-panel .action-bar {
   display: flex;
   gap: var(--spacing-sm);

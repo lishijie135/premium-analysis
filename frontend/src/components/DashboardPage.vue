@@ -1,5 +1,17 @@
 <template>
   <div class="dashboard-page">
+    <!-- 开始分析按钮 -->
+    <div v-if="!performanceData" class="dashboard-start-area">
+      <el-button type="primary" size="large" :loading="analyzing" @click="startAnalysis">
+        开始分析
+      </el-button>
+    </div>
+
+    <!-- 数据概要 -->
+    <SummaryBar v-if="summary" :summary="summary" />
+
+    <!-- 分析结果内容 -->
+    <template v-if="performanceData">
     <!-- 顶部筛选条：时间维度 + 起止期 -->
     <div class="filter-bar">
       <span class="muted">时间维度：</span>
@@ -26,7 +38,7 @@
     <TrendChart :data="filtered" />
 
     <!-- 年度对比 -->
-    <YearCompare :data="performance.year_compare" />
+    <YearCompare :data="performanceData.year_compare" />
 
     <!-- 当前维度明细表 -->
     <h3 class="card-title" style="margin-top: calc(var(--fs-base) * 1)">明细数据（{{ dimLabel }}）</h3>
@@ -41,26 +53,35 @@
         <el-table-column prop="active_customers" label="活跃客户" min-width="110" sortable align="right" />
       </el-table>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import TrendChart from './TrendChart.vue'
 import YearCompare from './YearCompare.vue'
+import SummaryBar from './SummaryBar.vue'
 import { fmtMoney } from '../utils/format'
+import { analyze, SESSION_EXPIRED } from '../api/client.js'
 
 const props = defineProps({
-  // performance: monthly / quarterly / yearly / year_compare
-  performance: { type: Object, required: true }
+  sessionId: { type: String, default: '' },
+  mapping: { type: Object, default: () => ({}) }
 })
-const emit = defineEmits(['range-change'])
+const emit = defineEmits(['range-change', 'session-expired'])
+
+// 内部状态
+const analyzing = ref(false)
+const summary = ref(null)
+const performanceData = ref(null)
 
 const dim = ref('monthly') // monthly | quarterly | yearly
 const dimLabel = computed(() => ({ monthly: '月度', quarterly: '季度', yearly: '年度' }[dim.value]))
 
 // 当前维度对应序列
-const series = computed(() => props.performance[dim.value] || [])
+const series = computed(() => performanceData.value?.[dim.value] || [])
 const periods = computed(() => series.value.map((item) => item.period))
 
 const start = ref('')
@@ -81,11 +102,9 @@ function onStartChange(val) {
   if (endIdx < idx) end.value = val
 }
 
-watch(
-  () => props.performance,
-  () => resetRange(),
-  { immediate: true }
-)
+watch(performanceData, () => {
+  if (performanceData.value) resetRange()
+})
 
 // 监听时间维度和起止期变化，向父组件 emit 月度维度的起止期
 // AiAnomalyPanel 需要月度格式的起止期来动态筛选数据
@@ -94,7 +113,7 @@ watch(
   () => {
     // 始终传递月度维度的起止期（不管当前维度是什么）
     // 月度序列始终存在于 performance.monthly 中
-    const monthlySeries = props.performance.monthly || []
+    const monthlySeries = performanceData.value?.monthly || []
     const monthlyPeriods = monthlySeries.map((item) => item.period)
     // 尝试将当前起止期映射到月度序列
     // period 格式: 月度="2025-10", 季度="25Q4", 年度="2025"
@@ -126,6 +145,24 @@ const filtered = computed(() => {
   if (i === -1 || j === -1) return list
   return list.slice(Math.min(i, j), Math.max(i, j) + 1)
 })
+
+// 开始分析
+async function startAnalysis() {
+  analyzing.value = true
+  try {
+    const res = await analyze(props.sessionId, props.mapping)
+    summary.value = res.summary
+    performanceData.value = res.performance
+  } catch (err) {
+    if (err.code === SESSION_EXPIRED) {
+      emit('session-expired')
+    } else {
+      ElMessage.error('分析失败：' + (err.message || '未知错误'))
+    }
+  } finally {
+    analyzing.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -180,6 +217,12 @@ const filtered = computed(() => {
 /* 年度对比区域 */
 .dashboard-page .compare-section {
   margin-top: var(--spacing-md);
+}
+
+.dashboard-start-area {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
 }
 
 /* 响应式 */

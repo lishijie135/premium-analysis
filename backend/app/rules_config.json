@@ -69,8 +69,8 @@
         ]
       },
       "thresholds": {
-        "premium_drop_pct": -50,
-        "policies_drop_pct": -50
+        "premium_drop_pct": -30,
+        "policies_drop_pct": -30
       },
       "output_columns": [
         "客户代码",

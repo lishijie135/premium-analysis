@@ -74,6 +74,49 @@ class SessionStore:
                 return None
             return entry.get("mapping")
 
+
+    def _get_session(self, session_id: str) -> Optional[Dict]:
+        """获取会话字典，过期时自动清理并返回 None（内部使用，调用方需已持有锁）。"""
+        entry = self._sessions.get(session_id)
+        if entry is None:
+            return None
+        if time.time() - entry["created_at"] > self.ttl_seconds:
+            del self._sessions[session_id]
+            return None
+        return entry
+
+    def put_chat_message(self, session_id: str, role: str, content: str) -> None:
+        """追加一条对话消息到会话历史。"""
+        with self._lock:
+            session = self._get_session(session_id)
+            if session is None:
+                return
+            if "chat_history" not in session:
+                session["chat_history"] = []
+            session["chat_history"].append({"role": role, "content": content, "ts": time.time()})
+            # FIFO 淘汰：最多保留 20 条消息（10 轮对话）
+            if len(session["chat_history"]) > 20:
+                session["chat_history"] = session["chat_history"][-20:]
+            logger.debug("chat message appended: session=%s, role=%s, history_len=%d",
+                         session_id, role, len(session["chat_history"]))
+
+    def get_chat_history(self, session_id: str) -> list:
+        """获取会话的对话历史。"""
+        with self._lock:
+            session = self._get_session(session_id)
+            if session is None:
+                return []
+            return session.get("chat_history", [])
+
+    def clear_chat(self, session_id: str) -> None:
+        """清空会话的对话历史。"""
+        with self._lock:
+            session = self._get_session(session_id)
+            if session is None:
+                return
+            session["chat_history"] = []
+            logger.info("chat history cleared: session=%s", session_id)
+
     def size(self) -> int:
         with self._lock:
             return len(self._sessions)
@@ -95,43 +138,55 @@ class SessionStore:
 # 避免部署时 Git 覆盖导致用户自定义提示词丢失。
 # ---------------------------------------------------------------------------
 class PromptStore:
-    """用户提示词存储：优先从 JSON 文件加载，回退到 prompts.py 默认值。"""
+    """多模板提示词存储：支持多个提示词模板的 CRUD 管理。"""
 
     USER_PROMPT_FILE = Path(__file__).resolve().parent / "user_prompt.json"
 
     def __init__(self) -> None:
-        self._prompts: dict[str, str] = {}
-        # 优先从 JSON 文件加载用户保存的提示词
-        user_prompt = self._load_from_json()
-        if user_prompt:
-            self._prompts["default"] = user_prompt
-            logger.info("从 user_prompt.json 加载用户提示词成功（%d 字符）", len(user_prompt))
-        else:
-            # 回退到 prompts.py 中的默认值
-            self._prompts["default"] = self._load_from_source()
-            logger.info("user_prompt.json 不存在，使用 prompts.py 默认提示词")
+        self._templates: dict[str, dict] = {}  # id -> {name, content}
+        self._active_id: str = "default"
+        self._load()
 
-    def _load_from_json(self) -> str | None:
-        """从 user_prompt.json 加载用户保存的提示词。"""
+    def _load(self) -> None:
+        """从 JSON 文件加载模板，失败则创建默认模板。"""
         if self.USER_PROMPT_FILE.exists():
             try:
                 data = json.loads(self.USER_PROMPT_FILE.read_text(encoding="utf-8"))
-                return data.get("prompt")
+                templates_list = data.get("templates", [])
+                self._active_id = data.get("active_id", "default")
+                for t in templates_list:
+                    self._templates[t["id"]] = {"name": t["name"], "content": t["content"]}
+                if not self._templates:
+                    self._create_default()
+                logger.info("从 user_prompt.json 加载 %d 个模板", len(self._templates))
+                return
             except Exception as exc:
-                logger.warning("读取 user_prompt.json 失败: %s，将回退到默认提示词", exc)
-                return None
-        return None
+                logger.warning("读取 user_prompt.json 失败: %s", exc)
+        self._create_default()
 
-    def _save_to_json(self, prompt_text: str) -> None:
-        """将用户提示词保存到 JSON 文件（不被 Git 跟踪）。"""
+    def _create_default(self) -> None:
+        """创建默认模板（从 prompts.py 加载默认提示词）。"""
+        self._templates = {
+            "default": {"name": "默认模板", "content": self._load_from_source()}
+        }
+        self._active_id = "default"
+        self._save_to_json()
+        logger.info("已创建默认模板")
+
+    def _save_to_json(self) -> None:
+        """保存所有模板到 JSON 文件。"""
+        templates_list = [
+            {"id": tid, "name": t["name"], "content": t["content"]}
+            for tid, t in self._templates.items()
+        ]
+        data = {"templates": templates_list, "active_id": self._active_id}
         self.USER_PROMPT_FILE.write_text(
-            json.dumps({"prompt": prompt_text}, ensure_ascii=False, indent=2),
+            json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        logger.info("用户提示词已保存到 %s（%d 字符）", self.USER_PROMPT_FILE, len(prompt_text))
 
     def _load_from_source(self) -> str:
-        """从 prompts.py 加载默认提示词（保留原有逻辑）。"""
+        """从 prompts.py 加载默认提示词。"""
         try:
             from .prompts import DEFAULT_PROMPT
             return DEFAULT_PROMPT
@@ -139,14 +194,81 @@ class PromptStore:
             logger.warning("从 prompts.py 加载默认提示词失败: %s", exc)
             return ""
 
+    # ---- 模板 CRUD ----
+
+    def list_templates(self) -> list:
+        """返回所有模板列表 [{id, name, active}, ...]。"""
+        return [
+            {"id": tid, "name": t["name"], "active": tid == self._active_id}
+            for tid, t in self._templates.items()
+        ]
+
+    def get_template(self, template_id: str) -> dict | None:
+        """获取单个模板 {id, name, content}，不存在返回 None。"""
+        t = self._templates.get(template_id)
+        if t is None:
+            return None
+        return {"id": template_id, "name": t["name"], "content": t["content"]}
+
+    def create_template(self, name: str, content: str) -> dict:
+        """创建新模板，返回 {id, name, content}。"""
+        import uuid
+        tid = uuid.uuid4().hex[:8]
+        self._templates[tid] = {"name": name, "content": content}
+        self._save_to_json()
+        return {"id": tid, "name": name, "content": content}
+
+    def update_template(self, template_id: str, name: str | None = None, content: str | None = None) -> dict | None:
+        """更新模板，返回更新后的模板或 None。"""
+        t = self._templates.get(template_id)
+        if t is None:
+            return None
+        if name is not None:
+            t["name"] = name
+        if content is not None:
+            t["content"] = content
+        self._save_to_json()
+        return {"id": template_id, "name": t["name"], "content": t["content"]}
+
+    def delete_template(self, template_id: str) -> bool:
+        """删除模板，不允许删除最后一个模板。返回是否成功。"""
+        if template_id not in self._templates:
+            return False
+        if len(self._templates) <= 1:
+            return False
+        del self._templates[template_id]
+        if self._active_id == template_id:
+            self._active_id = next(iter(self._templates))
+        self._save_to_json()
+        return True
+
+    def get_active_template(self) -> dict | None:
+        """获取当前激活的模板。"""
+        return self.get_template(self._active_id)
+
+    def set_active(self, template_id: str) -> bool:
+        """设置当前激活的模板。"""
+        if template_id not in self._templates:
+            return False
+        self._active_id = template_id
+        self._save_to_json()
+        return True
+
+    # ---- 向后兼容方法 ----
+
     def save(self, key: str, prompt_text: str) -> None:
-        """保存提示词到内存和 JSON 文件。"""
-        self._prompts[key] = prompt_text
-        self._save_to_json(prompt_text)
+        """保存提示词（向后兼容）：保存到当前激活模板。"""
+        t = self._templates.get(self._active_id)
+        if t:
+            t["content"] = prompt_text
+            self._save_to_json()
 
     def get(self, key: str) -> str:
-        """获取提示词，不存在时回退到 prompts.py 默认值。"""
-        return self._prompts.get(key, self._load_from_source())
+        """获取提示词（向后兼容）：返回当前激活模板的内容。"""
+        t = self._templates.get(self._active_id)
+        if t:
+            return t["content"]
+        return self._load_from_source()
 
 
 # 全局单例

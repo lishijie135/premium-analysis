@@ -168,3 +168,124 @@ export async function saveRulesConfig(config) {
 export function getRulesExportUrl(sessionId, tableId, format) {
   return '/api/anomaly/rules-export?session_id=' + sessionId + '&table_id=' + tableId + '&format=' + format
 }
+
+/**
+ * 清空 AI 对话历史
+ * POST /api/chat/clear
+ * @param {string} sessionId - 会话 ID
+ */
+export async function clearChat(sessionId) {
+  if (USE_MOCK) {
+    await delay(200)
+    console.log('[client.js] Mock 模式：清空对话历史（本地模拟）')
+    return
+  }
+  await http.post('/chat/clear', { session_id: sessionId })
+}
+
+/**
+ * 自动优化提示词
+ * @param {string} prompt - 当前提示词内容
+ * @returns {Promise<{prompt: string}>} 优化后的提示词
+ */
+export async function optimizePrompt(prompt) {
+  if (USE_MOCK) {
+    await delay(1500)
+    return { prompt: prompt + '\n\n[Mock 模式：提示词已自动优化]' }
+  }
+  const { data } = await http.post('/anomaly/optimize-prompt', { prompt })
+  return data
+}
+
+// ---- 提示词模板管理 API ----
+
+/**
+ * 获取所有提示词模板列表
+ * @returns {Promise<{templates: Array<{id: string, name: string, active: boolean}>}>}
+ */
+export async function getTemplates() {
+  if (USE_MOCK) {
+    await delay(300)
+    return {
+      templates: [
+        { id: "default", name: "默认模板", active: true },
+        { id: "mock2", name: "季度分析模板", active: false }
+      ]
+    }
+  }
+  const { data } = await http.get('/anomaly/templates')
+  return data
+}
+
+/**
+ * 获取单个模板详情
+ * @param {string} templateId - 模板 ID
+ * @returns {Promise<{id: string, name: string, content: string}>}
+ */
+export async function getTemplate(templateId) {
+  if (USE_MOCK) {
+    await delay(200)
+    return { id: templateId, name: "Mock 模板", content: "Mock 提示词内容" }
+  }
+  const { data } = await http.get(`/anomaly/templates/${templateId}`)
+  return data
+}
+
+/**
+ * 创建新提示词模板
+ * @param {string} name - 模板名称
+ * @param {string} content - 提示词内容
+ * @returns {Promise<{id: string, name: string, content: string}>}
+ */
+export async function createTemplate(name, content) {
+  if (USE_MOCK) {
+    await delay(500)
+    return { id: "mock_" + Date.now(), name, content }
+  }
+  const { data } = await http.post('/anomaly/templates', { name, content })
+  return data
+}
+
+/**
+ * 更新提示词模板
+ * @param {string} templateId - 模板 ID
+ * @param {string} name - 模板名称
+ * @param {string} content - 提示词内容
+ * @returns {Promise<{id: string, name: string, content: string}>}
+ */
+export async function updateTemplate(templateId, name, content) {
+  if (USE_MOCK) {
+    await delay(300)
+    return { id: templateId, name, content }
+  }
+  const { data } = await http.put(`/anomaly/templates/${templateId}`, { name, content })
+  return data
+}
+
+/**
+ * 删除提示词模板
+ * @param {string} templateId - 模板 ID
+ * @returns {Promise<{success: boolean}>}
+ */
+export async function deleteTemplate(templateId) {
+  if (USE_MOCK) {
+    await delay(300)
+    return { success: true }
+  }
+  const { data } = await http.delete(`/anomaly/templates/${templateId}`)
+  return data
+}
+
+/**
+ * 设置当前激活的模板
+ * @param {string} templateId - 模板 ID
+ * @returns {Promise<{success: boolean}>}
+ */
+export async function activateTemplate(templateId) {
+  if (USE_MOCK) {
+    await delay(200)
+    return { success: true }
+  }
+  const { data } = await http.post(`/anomaly/templates/${templateId}/activate`)
+  return data
+}
