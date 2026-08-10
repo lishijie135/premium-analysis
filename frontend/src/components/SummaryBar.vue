@@ -57,3 +57,15 @@ const monthRangeText = computed(() => {
   return range && range.length === 2 ? `${range[0]} ~ ${range[1]}` : '-'
 })
 </script>
+
+<style scoped>
+/* 摘要卡片内部布局强化 - 浅色主题 */
+.card .summary-grid {
+  margin-top: var(--spacing-xs);
+}
+
+/* 无效行展开表格 */
+.card .table-scroll {
+  margin-top: var(--spacing-md);
+}
+</style>

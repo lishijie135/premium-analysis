@@ -1,0 +1,150 @@
+{
+  "version": "1.0",
+  "global": {
+    "min_policies": 2,
+    "drop_rate": 0.3,
+    "min_consecutive": 2,
+    "idle_months": 2
+  },
+  "tables": [
+    {
+      "id": "q2_vs_q1",
+      "name": "2026Q2 vs 2026Q1 季度环比",
+      "enabled": true,
+      "type": "period_compare",
+      "base_period": {
+        "year": 2026,
+        "months": [
+          1,
+          2,
+          3
+        ]
+      },
+      "curr_period": {
+        "year": 2026,
+        "months": [
+          4,
+          5,
+          6
+        ]
+      },
+      "thresholds": {
+        "premium_drop_pct": -50,
+        "policies_drop_pct": -50
+      },
+      "output_columns": [
+        "客户代码",
+        "基期保费",
+        "基期单量",
+        "当期保费",
+        "当期单量",
+        "保费环比%",
+        "单量环比%",
+        "风险等级"
+      ],
+      "sort_by": {
+        "field": "premium_change_pct",
+        "order": "asc"
+      }
+    },
+    {
+      "id": "q2_vs_q4",
+      "name": "2026Q2 vs 2025Q4 跨季对比",
+      "enabled": true,
+      "type": "period_compare",
+      "base_period": {
+        "year": 2025,
+        "months": [
+          10,
+          11,
+          12
+        ]
+      },
+      "curr_period": {
+        "year": 2026,
+        "months": [
+          4,
+          5,
+          6
+        ]
+      },
+      "thresholds": {
+        "premium_drop_pct": -50,
+        "policies_drop_pct": -50
+      },
+      "output_columns": [
+        "客户代码",
+        "基期保费",
+        "基期单量",
+        "当期保费",
+        "当期单量",
+        "保费环比%",
+        "单量环比%",
+        "风险等级"
+      ],
+      "sort_by": {
+        "field": "premium_change_pct",
+        "order": "asc"
+      }
+    },
+    {
+      "id": "jul_vs_jun",
+      "name": "2026年7月 vs 6月 月度环比",
+      "enabled": true,
+      "type": "period_compare",
+      "base_period": {
+        "year": 2026,
+        "months": [
+          6
+        ]
+      },
+      "curr_period": {
+        "year": 2026,
+        "months": [
+          7
+        ]
+      },
+      "thresholds": {
+        "premium_drop_pct": -50,
+        "policies_drop_pct": -50
+      },
+      "output_columns": [
+        "客户代码",
+        "基期保费",
+        "基期单量",
+        "当期保费",
+        "当期单量",
+        "保费环比%",
+        "单量环比%",
+        "风险等级"
+      ],
+      "sort_by": {
+        "field": "premium_change_pct",
+        "order": "asc"
+      }
+    },
+    {
+      "id": "customer_peak",
+      "name": "客户峰值（最高保费/单量）",
+      "enabled": true,
+      "type": "customer_peak",
+      "base_period": {
+        "year": 0,
+        "months": []
+      },
+      "curr_period": {
+        "year": 0,
+        "months": []
+      },
+      "thresholds": {
+        "premium_drop_pct": 0,
+        "policies_drop_pct": 0
+      },
+      "output_columns": [],
+      "sort_by": {
+        "field": "max_premium",
+        "order": "desc"
+      }
+    }
+  ]
+}

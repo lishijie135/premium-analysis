@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="dashboard-page">
     <!-- 顶部筛选条：时间维度 + 起止期 -->
     <div class="filter-bar">
       <span class="muted">时间维度：</span>
@@ -54,6 +54,7 @@ const props = defineProps({
   // performance: monthly / quarterly / yearly / year_compare
   performance: { type: Object, required: true }
 })
+const emit = defineEmits(['range-change'])
 
 const dim = ref('monthly') // monthly | quarterly | yearly
 const dimLabel = computed(() => ({ monthly: '月度', quarterly: '季度', yearly: '年度' }[dim.value]))
@@ -86,6 +87,33 @@ watch(
   { immediate: true }
 )
 
+// 监听时间维度和起止期变化，向父组件 emit 月度维度的起止期
+// AiAnomalyPanel 需要月度格式的起止期来动态筛选数据
+watch(
+  [start, end, dim],
+  () => {
+    // 始终传递月度维度的起止期（不管当前维度是什么）
+    // 月度序列始终存在于 performance.monthly 中
+    const monthlySeries = props.performance.monthly || []
+    const monthlyPeriods = monthlySeries.map((item) => item.period)
+    // 尝试将当前起止期映射到月度序列
+    // period 格式: 月度="2025-10", 季度="25Q4", 年度="2025"
+    let mStart = ''
+    let mEnd = ''
+    if (dim.value === 'monthly') {
+      // 月度维度直接使用当前起止期
+      mStart = start.value
+      mEnd = end.value
+    } else {
+      // 季度/年度维度：传递月度全量范围（让后端用默认 REQUIRED_MONTHS）
+      mStart = monthlyPeriods[0] || ''
+      mEnd = monthlyPeriods[monthlyPeriods.length - 1] || ''
+    }
+    emit('range-change', { start: mStart, end: mEnd })
+  },
+  { immediate: true }
+)
+
 const isFullRange = computed(
   () => start.value === periods.value[0] && end.value === periods.value[periods.value.length - 1]
 )
@@ -99,3 +127,65 @@ const filtered = computed(() => {
   return list.slice(Math.min(i, j), Math.max(i, j) + 1)
 })
 </script>
+
+<style scoped>
+.dashboard-page {
+  padding: 0;
+}
+
+/* 筛选区域 */
+.dashboard-page .filter-section {
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--color-border-light);
+}
+
+/* 图表卡片 */
+.dashboard-page .chart-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--color-border-light);
+  transition: box-shadow 0.2s ease;
+}
+
+.dashboard-page .chart-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* 图表标题 */
+.dashboard-page .chart-title {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
+  padding-left: 12px;
+  border-left: 3px solid var(--color-primary);
+  line-height: 1.4;
+}
+
+/* 表格区域 */
+.dashboard-page .table-section {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border-light);
+}
+
+/* 年度对比区域 */
+.dashboard-page .compare-section {
+  margin-top: var(--spacing-md);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .dashboard-page .chart-card {
+    padding: var(--spacing-sm);
+  }
+}
+</style>

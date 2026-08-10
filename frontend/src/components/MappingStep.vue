@@ -79,3 +79,15 @@ function confirm() {
   emit('confirm', { ...mapping })
 }
 </script>
+
+<style scoped>
+.mapping-step {
+  font-size: var(--fs-base);
+}
+.mapping-step .mapping-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-lg);
+}
+</style>

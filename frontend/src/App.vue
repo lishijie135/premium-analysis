@@ -1,18 +1,28 @@
 <template>
   <div class="app-shell">
+    <!-- 顶部 Header -->
     <header class="app-header">
-      <h1>客户业绩保费分析系统</h1>
-      <el-tag v-if="mockMode" type="warning" effect="plain">Mock 预览模式</el-tag>
-      <span class="muted">上传 Excel → 确认列映射 → 查看业绩统计与 AI 异常分析</span>
+      <div class="header-left">
+        <div class="logo-icon">P</div>
+        <h1>客户业绩保费分析系统</h1>
+      </div>
+      <div class="header-right">
+        <span class="header-subtitle">Premium Analysis System</span>
+        <el-tag v-if="mockMode" type="warning" effect="plain" size="small">Mock</el-tag>
+      </div>
     </header>
 
-    <el-steps :active="step" finish-status="success" align-center class="steps-bar">
-      <el-step title="上传文件" />
-      <el-step title="确认列映射" />
-      <el-step title="分析结果" />
-    </el-steps>
+    <!-- 步骤条 -->
+    <div class="steps-container">
+      <el-steps :active="step" finish-status="success" align-center class="steps-bar">
+        <el-step title="上传文件" description="导入 Excel 数据" />
+        <el-step title="确认列映射" description="校验字段对应关系" />
+        <el-step title="分析结果" description="业绩统计与异常分析" />
+      </el-steps>
+    </div>
 
-    <main>
+    <!-- 主内容区 -->
+    <main class="app-main">
       <UploadPage v-if="step === 0" @uploaded="onUploaded" />
 
       <MappingStep
@@ -45,8 +55,8 @@ import { analyze, isMockMode, SESSION_EXPIRED } from './api/client'
 const mockMode = isMockMode()
 
 const step = ref(0)
-const uploadResult = ref(null) // /api/upload 返回：session_id/columns/preview_rows/auto_mapping/need_manual/warnings
-const result = ref(null) // /api/analyze 返回：summary/performance/anomalies/growth
+const uploadResult = ref(null)
+const result = ref(null)
 const analyzing = ref(false)
 
 function onUploaded(res) {
@@ -71,7 +81,6 @@ async function onConfirmMapping(mapping) {
   }
 }
 
-// AI 异常分析流式接口返回 404（会话过期）时的统一处理
 function onSessionExpired() {
   ElMessage.error('会话已过期，请重新上传')
   reset()
@@ -86,6 +95,6 @@ function reset() {
 
 <style scoped>
 .steps-bar {
-  margin: calc(var(--fs-base) * 1.25) 0 calc(var(--fs-base) * 1.5);
+  max-width: 600px;
 }
 </style>

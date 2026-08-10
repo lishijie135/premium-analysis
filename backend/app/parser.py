@@ -1,5 +1,6 @@
-"""Excel 解析模块：读取、列识别、日期/金额归一、剔除与去重。"""
+﻿"""Excel 解析模块：读取、列识别、日期/金额归一、剔除与去重。"""
 import io
+import logging
 import math
 import re
 from datetime import datetime, timedelta
@@ -8,6 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from . import config
+
+logger = logging.getLogger(__name__)
 
 _MONEY_CLEAN_RE = re.compile(r"[¥￥$元,，\s]")
 _EXCEL_EPOCH = datetime(1899, 12, 30)
@@ -242,10 +245,21 @@ def extract_records(df: pd.DataFrame, mapping: Dict[str, str]) -> Dict[str, Any]
         premiums.append(float(premium))
         policies.append(int(round(float(pol))))
 
+    # ---- 收集已映射的原始列名（用于识别额外业务列） ----
+    mapped_orig_cols = {col_customer, col_date, col_premium, col_policies}
+    if idx_col is not None:
+        mapped_orig_cols.add("__orig_idx__")
+
+    # 额外列：原始 DataFrame 中未被映射的列
+    extra_cols = [c for c in df.columns if c not in mapped_orig_cols]
+    logger.info("识别到 %d 个额外业务列: %s", len(extra_cols), extra_cols)
+
     parsed_ok = len(customers)
     if parsed_ok > 0:
-        cleaned = pd.DataFrame(
+        # 构建核心列的 DataFrame（含临时位置索引用于关联额外列）
+        core_df = pd.DataFrame(
             {
+                "__pos": range(parsed_ok),
                 "customer": customers,
                 "year": years,
                 "month": months,
@@ -253,15 +267,35 @@ def extract_records(df: pd.DataFrame, mapping: Dict[str, str]) -> Dict[str, Any]
                 "policies": policies,
             }
         )
-        dup_counts = cleaned.groupby(["customer", "year", "month"]).size()
+
+        dup_counts = core_df.groupby(["customer", "year", "month"]).size()
         duplicate_rows = int((dup_counts - 1).clip(lower=0).sum())
+
+        # 对核心列做 sum 聚合
         cleaned = (
-            cleaned.groupby(["customer", "year", "month"], as_index=False)
+            core_df.groupby(["customer", "year", "month"], as_index=False)
             .agg(premium=("premium", "sum"), policies=("policies", "sum"))
         )
+
+        # ---- 保留额外业务列：对每个 (customer, year, month) 取第一个值 ----
+        if extra_cols:
+            # 利用 __pos 从原始 df 中提取额外列数据
+            extra_df = pd.DataFrame(
+                {col: df[col].values[core_df["__pos"].values] for col in extra_cols}
+            )
+            extra_df["customer"] = customers
+            extra_df["year"] = years
+            extra_df["month"] = months
+            extra_agg = (
+                extra_df.groupby(["customer", "year", "month"], as_index=False)[extra_cols]
+                .first()
+            )
+            cleaned = cleaned.merge(extra_agg, on=["customer", "year", "month"], how="left")
+            logger.info("已将 %d 个额外列合并到 cleaned DataFrame", len(extra_cols))
     else:
         duplicate_rows = 0
-        cleaned = pd.DataFrame(columns=["customer", "year", "month", "premium", "policies"])
+        cols = ["customer", "year", "month", "premium", "policies"] + extra_cols
+        cleaned = pd.DataFrame(columns=cols)
 
     valid_rows = parsed_ok - duplicate_rows
     return {

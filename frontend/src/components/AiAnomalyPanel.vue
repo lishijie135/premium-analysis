@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="ai-anomaly-panel">
     <!-- Mock 模式：仅展示说明文字（无真实后端与大模型） -->
     <el-alert
       v-if="mockMode"
@@ -7,19 +7,32 @@
       :closable="false"
       show-icon
       title="当前为 Mock 预览模式"
-      description="AI 异常分析需连接真实后端（VITE_USE_MOCK=false）并配置 backend/.env 中的 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 后方可使用。"
+      description="AI 数据分析需连接真实后端（VITE_USE_MOCK=false）并配置 backend/.env 中的 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 后方可使用。"
     />
 
     <template v-else>
       <!-- 提示词编辑区：改规则只改提示词 -->
       <div class="prompt-box">
-        <el-input
-          v-model="prompt"
-          type="textarea"
-          :autosize="{ minRows: 8, maxRows: 20 }"
-          placeholder="加载中…"
-          :disabled="streaming || loadingPrompt"
-        />
+        <!-- 提示词编辑面板（条件渲染） -->
+        <div v-if="showPromptEditor" class="prompt-editor-panel" style="margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-weight: 600; font-size: 14px; color: #5f6368;">系统提示词</span>
+            <el-button type="success" size="small" :loading="loadingPrompt" :disabled="streaming || !prompt.trim()" @click="handleSavePrompt">
+              保存提示词
+            </el-button>
+          </div>
+          <el-input
+            v-model="prompt"
+            type="textarea"
+            :autosize="{ minRows: 8, maxRows: 20 }"
+            placeholder="请输入系统提示词..."
+            :disabled="streaming || loadingPrompt"
+            style="width: 100%;"
+          />
+          <div style="margin-top: 4px; font-size: 12px; color: #9aa0a6;">
+            提示：修改提示词后，点击"保存提示词"将更新系统默认提示词。支持自定义分析维度、输出格式等。
+          </div>
+        </div>
         <div class="btn-bar">
           <el-button
             type="primary"
@@ -31,6 +44,9 @@
           </el-button>
           <el-button v-if="streaming" type="danger" @click="stop">停止</el-button>
           <el-button :disabled="streaming || loadingPrompt" @click="resetPrompt">重置提示词</el-button>
+          <el-button size="small" @click="showPromptEditor = !showPromptEditor">
+            {{ showPromptEditor ? "收起提示词" : "编辑提示词" }}
+          </el-button>
           <span v-if="streaming" class="muted">正在流式生成，可实时查看下方结果</span>
         </div>
       </div>
@@ -41,6 +57,7 @@
           <span class="muted">分析结果</span>
           <div class="output-actions">
             <el-button size="small" :disabled="!fullText || streaming" @click="copyMd">复制</el-button>
+            <el-button size="small" :disabled="!fullText || streaming" @click="exportToPDF">导出 PDF</el-button>
           </div>
         </div>
 
@@ -66,10 +83,12 @@ import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import html2canvas from 'html2canvas'
-import { getDefaultPrompt, isMockMode } from '../api/client'
+import { getDefaultPrompt, isMockMode, savePrompt } from '../api/client'
 
 const props = defineProps({
-  sessionId: { type: String, default: '' } // 上传后获得的会话 ID
+  sessionId: { type: String, default: '' },  // 上传后获得的会话 ID
+  startMonth: { type: String, default: '' }, // "YYYY-MM" 格式，如 "2025-10"
+  endMonth: { type: String, default: '' },   // "YYYY-MM" 格式，如 "2026-07"
 })
 const emit = defineEmits(['session-expired'])
 
@@ -83,6 +102,7 @@ const loadingPrompt = ref(false)
 const streaming = ref(false) // 是否正在流式输出
 const fullText = ref('') // 累积的 Markdown 原文
 const errorMsg = ref('') // 错误信息
+const showPromptEditor = ref(true) // 控制提示词编辑器显示/隐藏
 let abortController = null // 用于"停止"按钮中断请求
 
 // 拉取默认提示词（失败时保留空并提示）
@@ -98,10 +118,40 @@ async function loadDefaultPrompt() {
   }
 }
 
-// 重置提示词为默认值
+// 重置提示词为默认值：先将当前编辑内容保存到后端 prompts.py，再重新加载
 async function resetPrompt() {
+  if (!prompt.value.trim()) {
+    ElMessage.warning('提示词为空，无需保存')
+    await loadDefaultPrompt()
+    return
+  }
+  try {
+    // 先保存当前提示词到后端 prompts.py
+    await savePrompt(prompt.value)
+    ElMessage.success('当前提示词已保存到 prompts.py')
+  } catch (err) {
+    ElMessage.error('保存提示词失败：' + (err.response?.data?.detail || err.message || '未知错误'))
+    return // 保存失败则不继续重置
+  }
+  // 保存成功后，从后端重新加载（此时后端已更新）
   await loadDefaultPrompt()
-  ElMessage.success('已重置为默认提示词')
+}
+
+/** 保存修改后的提示词 */
+async function handleSavePrompt() {
+  if (!prompt.value.trim()) {
+    ElMessage.warning('提示词不能为空')
+    return
+  }
+  loadingPrompt.value = true
+  try {
+    await savePrompt(prompt.value)
+    ElMessage.success('提示词已保存')
+  } catch (err) {
+    ElMessage.error('保存失败：' + (err.response?.data?.detail || err.message || '未知错误'))
+  } finally {
+    loadingPrompt.value = false
+  }
 }
 
 // 渲染：Markdown -> HTML；流式过程中追加打字光标
@@ -110,6 +160,15 @@ const renderedHtml = computed(() => {
   const html = marked.parse(fullText.value)
   return streaming.value ? html + '<span class="typing-cursor">▍</span>' : html
 })
+
+/** 构建流式分析请求体：包含会话ID、提示词和可选的时间范围 */
+function buildRequestBody() {
+  const body = { session_id: props.sessionId, prompt: prompt.value }
+  // 仅在前端传入了有效时间范围时才附加，后端据此动态筛选数据
+  if (props.startMonth) body.start_month = props.startMonth
+  if (props.endMonth) body.end_month = props.endMonth
+  return body
+}
 
 /** 发起 SSE 流式分析（fetch + ReadableStream 手动解析 SSE） */
 async function start() {
@@ -127,7 +186,7 @@ async function start() {
     const resp = await fetch('/api/anomaly/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: props.sessionId, prompt: prompt.value }),
+      body: JSON.stringify(buildRequestBody()),
       signal: abortController.signal
     })
     if (!resp.ok) {
@@ -223,6 +282,52 @@ function downloadBlob(content, filename, mime) {
 function downloadMd() {
   downloadBlob(fullText.value, '异常分析结果.md', 'text/markdown;charset=utf-8')
 }
+
+/** 导出分析结果为 PDF（通过打印对话框另存为） */
+function exportToPDF() {
+  const mdBody = document.querySelector('.md-body')
+  if (!mdBody || !mdBody.innerHTML.trim()) {
+    ElMessage.warning('暂无分析结果可导出')
+    return
+  }
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    ElMessage.error('请允许弹出窗口以导出 PDF')
+    return
+  }
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>AI 数据分析报告</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.6;color:#202124;padding:20px;max-width:900px;margin:0 auto}
+h1,h2,h3{color:#1a73e8}
+h1{font-size:20px;border-bottom:2px solid #1a73e8;padding-bottom:8px}
+h2{font-size:16px;margin-top:20px}
+h3{font-size:14px}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+th{background:#f8f9fa;padding:8px 10px;font-weight:600;border:1px solid #dadce0;text-align:left;color:#5f6368}
+td{padding:6px 10px;border:1px solid #dadce0}
+tr:nth-child(even){background:#fafbfc}
+strong{color:#202124}
+em{color:#5f6368}
+hr{border:none;border-top:1px solid #e8eaed;margin:16px 0}
+p{margin:8px 0}
+ul,ol{margin:8px 0;padding-left:24px}
+li{margin:4px 0}
+code{background:#f1f3f4;padding:2px 6px;border-radius:3px;font-size:13px}
+blockquote{border-left:3px solid #1a73e8;padding-left:12px;color:#5f6368;margin:12px 0}
+@media print{body{padding:10px}table{page-break-inside:avoid}}
+</style></head><body>
+<h1>AI 数据分析报告</h1>
+<p style="color:#9aa0a6;font-size:12px">生成时间：${new Date().toLocaleString('zh-CN')}</p>
+<hr>
+${mdBody.innerHTML}
+</body></html>`
+  printWindow.document.write(html)
+  printWindow.document.close()
+  setTimeout(() => { printWindow.print(); printWindow.close() }, 500)
+  ElMessage.success('PDF 导出已启动，请在打印对话框中选择"另存为 PDF"')
+}
+
 
 /**
  * 从 Markdown 文本中提取所有表格（连续的 | 行块，且第二行为分隔行）
@@ -342,56 +447,9 @@ async function downloadTablePng(tableEl, tableIndex) {
   }
 }
 
-/** 为渲染区所有表格注入浮动操作栏 */
-function attachTableToolbars() {
-  const mdBody = document.querySelector('.md-body')
-  if (!mdBody) return
-  const tables = mdBody.querySelectorAll('table')
-  if (!tables.length) return
+// CSV/PNG 下载按钮已移除（需求变更）
 
-  tables.forEach((tableEl, idx) => {
-    // 避免重复注入
-    if (tableEl.dataset.toolbarAttached === 'true') return
-    tableEl.dataset.toolbarAttached = 'true'
-
-    // 包裹表格，使其可以相对定位操作栏
-    const wrapper = document.createElement('div')
-    wrapper.className = 'table-wrapper'
-    wrapper.style.position = 'relative'
-    wrapper.style.display = 'inline-block'
-    wrapper.style.width = '100%'
-
-    // 创建浮动操作栏
-    const toolbar = document.createElement('div')
-    toolbar.className = 'table-toolbar'
-    toolbar.innerHTML = `
-      <button class="toolbar-btn" title="下载 CSV">CSV</button>
-      <button class="toolbar-btn" title="下载 PNG">PNG</button>
-    `
-    // 绑定事件
-    const [csvBtn, pngBtn] = toolbar.querySelectorAll('.toolbar-btn')
-    csvBtn.addEventListener('click', (e) => {
-      e.stopPropagation()
-      downloadTableCsv(tableEl, idx)
-    })
-    pngBtn.addEventListener('click', (e) => {
-      e.stopPropagation()
-      downloadTablePng(tableEl, idx)
-    })
-
-    // 将表格包裹起来
-    tableEl.parentNode.insertBefore(wrapper, tableEl)
-    wrapper.appendChild(tableEl)
-    wrapper.appendChild(toolbar)
-  })
-}
-
-// 监听 renderedHtml 变化，渲染完成后注入操作栏
-watch(renderedHtml, () => {
-  nextTick(() => {
-    attachTableToolbars()
-  })
-})
+// CSV/PNG 工具栏注入已移除
 
 onMounted(() => {
   if (!mockMode) loadDefaultPrompt()
@@ -403,110 +461,57 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.prompt-box {
-  margin-bottom: calc(var(--fs-base) * 1);
+.ai-anomaly-panel {
+  font-size: var(--fs-base);
 }
-.btn-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+.ai-anomaly-panel .prompt-section {
+  background: var(--bg-hover);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
-.output-card {
-  border: 1px solid var(--el-border-color-light, #e4e7ed);
-  border-radius: 6px;
-  padding: 12px 16px;
-  min-height: 180px;
+.ai-anomaly-panel .md-body {
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  min-height: 200px;
+  font-size: var(--fs-base);
+  line-height: 1.8;
 }
-.output-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.err-alert {
-  margin-bottom: 10px;
-}
-.loading-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #909399;
-  padding: 8px 0;
-}
-/* Markdown 渲染区：表格边框 + 斑马纹 */
-.md-body :deep(table) {
+/* 表格样式 */
+.md-body table {
+  width: 100%;
   border-collapse: collapse;
   margin: 12px 0;
-  font-size: calc(var(--fs-base) * 0.9);
+  border: 1px solid #dadce0;
+  font-size: 14px;
 }
-.md-body :deep(th),
-.md-body :deep(td) {
-  border: 1px solid #dcdfe6;
-  padding: 6px 10px;
+.md-body th {
+  background: #f8f9fa;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #5f6368;
+  border: 1px solid #dadce0;
   text-align: left;
 }
-.md-body :deep(th) {
-  background: #f0f2f5;
+.md-body td {
+  padding: 8px 12px;
+  border: 1px solid #dadce0;
+  font-size: 14px;
+  color: #202124;
 }
-.md-body :deep(tr:nth-child(even)) {
-  background: #f7f8fa;
+.md-body tr:nth-child(even) {
+  background: #fafbfc;
 }
-.md-body :deep(h1),
-.md-body :deep(h2),
-.md-body :deep(h3) {
-  margin: 12px 0 8px;
+.md-body tr:hover {
+  background: #e8f0fe;
 }
-/* 打字光标 */
-.md-body :deep(.typing-cursor) {
-  display: inline-block;
-  animation: cursor-blink 1s steps(1) infinite;
-  color: #409eff;
-}
-@keyframes cursor-blink {
-  50% {
-    opacity: 0;
-  }
-}
-/* 逐表下载操作栏 */
-.table-wrapper {
-  position: relative;
-  display: inline-block;
-  width: 100%;
-}
-.table-toolbar {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+.ai-anomaly-panel .action-bar {
   display: flex;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  padding: 3px 5px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 10;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-.table-wrapper:hover .table-toolbar {
-  opacity: 1;
-}
-.toolbar-btn {
-  font-size: 11px;
-  line-height: 1;
-  padding: 3px 7px;
-  border: 1px solid #dcdfe6;
-  border-radius: 3px;
-  background: #f5f7fa;
-  color: #606266;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-.toolbar-btn:hover {
-  background: #409eff;
-  color: #fff;
-  border-color: #409eff;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
 }
 </style>

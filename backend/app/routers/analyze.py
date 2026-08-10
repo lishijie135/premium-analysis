@@ -61,6 +61,9 @@ def analyze(req: AnalyzeRequest):
         if not col or col not in columns:
             raise _error(400, "列映射无效：%s 对应的列 '%s' 不存在" % (field, col))
 
+    # 保存用户确认的 mapping 到会话存储，供 AI 分析复用（避免 auto_map_columns 选到不同列）
+    store.put_mapping(req.session_id, mapping)
+
     parsed = parser.extract_records(df, mapping)
     cleaned: pd.DataFrame = parsed["cleaned"]
 

@@ -29,8 +29,8 @@ function buildOption(rows) {
     legend: { data: ['保费', '出单量', '新增客户', '活跃客户'] },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: [
-      { left: 70, right: 70, top: 50, height: '42%' }, // 主图：保费 + 单量
-      { left: 70, right: 70, top: '68%', height: '18%' } // 小图：客户数
+      { left: 80, right: 70, top: 50, height: '42%' }, // 主图：保费 + 单量
+      { left: 80, right: 70, top: '68%', height: '18%' } // 小图：客户数
     ],
     xAxis: [
       { type: 'category', data: periods, gridIndex: 0 },

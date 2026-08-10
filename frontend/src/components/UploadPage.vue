@@ -135,3 +135,81 @@ const previewData = computed(() => {
   })
 })
 </script>
+
+<style scoped>
+.upload-area {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 48px 24px;
+  text-align: center;
+  background: #fafbfc;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+.upload-area:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.upload-area .el-icon {
+  font-size: 48px;
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+}
+.upload-area .upload-text {
+  font-size: var(--fs-lg);
+  color: var(--color-text-primary);
+  margin-bottom: 8px;
+}
+.upload-area .upload-hint {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+/* el-upload 拖拽区域覆盖 */
+:deep(.el-upload-dragger) {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 48px 24px;
+  background: #fafbfc;
+  transition: all 0.3s ease;
+}
+:deep(.el-upload-dragger:hover) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+:deep(.el-upload-dragger .el-icon) {
+  font-size: 48px;
+  color: var(--color-text-muted);
+}
+:deep(.el-upload-dragger .el-upload__text) {
+  color: var(--color-text-primary);
+}
+
+/* 文件列表 */
+.file-list {
+  margin-top: var(--spacing-md);
+}
+.file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-xs);
+}
+.file-name {
+  color: var(--color-text-primary);
+  font-size: var(--fs-base);
+}
+.file-size {
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* 上传按钮 */
+.upload-btn {
+  margin-top: var(--spacing-lg);
+}
+</style>

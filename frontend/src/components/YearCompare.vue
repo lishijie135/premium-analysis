@@ -51,7 +51,7 @@ function buildOption(title, byYear) {
     title: { text: title, left: 'center', textStyle: { fontSize: 14 } },
     tooltip: { trigger: 'axis' },
     legend: { bottom: 0, data: props.data.years.map(String) },
-    grid: { left: 60, right: 20, top: 40, bottom: 50 },
+    grid: { left: 80, right: 20, top: 40, bottom: 50 },
     xAxis: { type: 'category', data: MONTHS },
     yAxis: { type: 'value' },
     series: props.data.years.map((year) => ({

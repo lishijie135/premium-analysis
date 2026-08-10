@@ -39,3 +39,286 @@
 2026-08-07 16:55:11,839 [INFO] anomaly_llm: 开始 LLM 流式分析: session=e042854f39e3415ba8c5595f477f15ea model=qwen-plus csv_chars=200000
 2026-08-07 16:55:40,103 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
 2026-08-07 17:02:19,636 [INFO] anomaly_llm: LLM 流式分析完成: session=e042854f39e3415ba8c5595f477f15ea
+2026-08-07 18:00:57,598 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 18:01:26,355 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 5 字符）
+2026-08-07 18:03:03,063 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 1531 字符）
+2026-08-07 18:03:50,760 [INFO] anomaly_llm: 月份过滤: 原始 32409 行 -> 过滤后 17143 行（所需月份 10 个）
+2026-08-07 18:03:50,813 [INFO] anomaly_llm: 月度明细 CSV 字符数: 397956（阈值 100000）
+2026-08-07 18:03:50,815 [INFO] anomaly_llm: 月度明细 CSV（397956 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 18:03:50,856 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 163266（7878 行）
+2026-08-07 18:03:50,860 [INFO] anomaly_llm: 开始 LLM 流式分析: session=261be319cea149328ae308796b722399 model=qwen-plus csv_chars=163266 enable_thinking=False max_tokens=16384
+2026-08-07 18:04:13,078 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 18:08:44,928 [INFO] anomaly_llm: LLM 流式分析完成: session=261be319cea149328ae308796b722399
+2026-08-07 18:11:45,347 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 19:55:58,595 [INFO] anomaly_llm: 月份过滤: 原始 32409 行 -> 过滤后 17143 行（所需月份 10 个）
+2026-08-07 19:55:58,700 [INFO] anomaly_llm: 月度明细 CSV 字符数: 397956（阈值 100000）
+2026-08-07 19:55:58,702 [INFO] anomaly_llm: 月度明细 CSV（397956 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 19:55:58,931 [INFO] anomaly_llm: 降级CSV附加月度明细: 3219 行（2026-06/07，表3用）
+2026-08-07 19:55:58,936 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 238326（7878 行聚合 + 3219 行月度明细）
+2026-08-07 19:55:58,945 [INFO] anomaly_llm: 开始 LLM 流式分析: session=387b7c2de6804d3794cd5dbed62a7415 model=qwen-plus csv_chars=238326 enable_thinking=False max_tokens=16384
+2026-08-07 19:55:59,497 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-08-07 19:55:59,504 [ERROR] anomaly_llm: 模型服务返回异常状态: HTTP 400 body={"error":{"message":"Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment","type":"Arrearage","param":null,"code":"Arrearage"},"id":"chatcmpl-49e4347f-bad4-9cd8-873f-097c7527cba8","request_id":"49e4347f-bad4-9cd8-873f-097c7527cba8"}
+2026-08-07 19:56:55,296 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 19:57:19,695 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: test-nonexist
+2026-08-07 19:57:33,762 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: test-nonexist
+2026-08-07 19:57:44,296 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: 387b7c2de6804d3794cd5dbed62a7415
+2026-08-07 20:01:59,710 [INFO] anomaly_llm: 动态月份范围: 2025-01 ~ 2026-07，共 19 个月
+2026-08-07 20:02:09,486 [INFO] anomaly_llm: 月份过滤: 原始 32409 行 -> 过滤后 32409 行（所需月份 19 个）
+2026-08-07 20:02:09,627 [INFO] anomaly_llm: 月度明细 CSV 字符数: 750736（阈值 100000）
+2026-08-07 20:02:09,629 [INFO] anomaly_llm: 月度明细 CSV（750736 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 20:02:09,856 [INFO] anomaly_llm: 降级CSV附加月度明细: 3219 行（2026-06, 2026-07）
+2026-08-07 20:02:09,859 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 367709（14124 行聚合 + 3219 行月度明细）
+2026-08-07 20:02:09,865 [INFO] anomaly_llm: 开始 LLM 流式分析: session=bb01338725cc4cd4925beeed294ce3f2 model=qwen-plus csv_chars=367709 enable_thinking=False max_tokens=16384
+2026-08-07 20:03:15,546 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 20:08:54,681 [INFO] anomaly_llm: LLM 流式分析完成: session=bb01338725cc4cd4925beeed294ce3f2
+2026-08-07 20:26:25,391 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 20:32:06,564 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 20:32:44,064 [INFO] app.rule_loader: 正在加载规则配置文件: D:\joe-project\workspace\premium-analysis\backend\app\rules_config.json
+2026-08-07 20:32:44,067 [INFO] app.rule_loader: 规则配置加载成功，共 3 张表规则
+2026-08-07 20:37:31,476 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 20:38:20,025 [INFO] app.rule_loader: 正在加载规则配置文件: D:\joe-project\workspace\premium-analysis\backend\app\rules_config.json
+2026-08-07 20:38:20,027 [INFO] app.rule_loader: 规则配置加载成功，共 3 张表规则
+2026-08-07 20:38:20,028 [INFO] anomaly_llm: 规则配置已恢复为默认
+2026-08-07 21:33:43,579 [INFO] app.configurable_engine: 规则引擎启动，共 3 张表规则，其中 3 张已启用
+2026-08-07 21:33:43,579 [INFO] app.configurable_engine: 开始执行规则表: q2_vs_q1 (2026Q2 vs 2026Q1 季度环比)
+2026-08-07 21:33:43,595 [INFO] app.configurable_engine: [q2_vs_q1] 基期客户数=2140, 当期客户数=1966
+2026-08-07 21:33:43,607 [INFO] app.configurable_engine: [q2_vs_q1] 识别异常客户数=559
+2026-08-07 21:33:43,652 [INFO] app.configurable_engine: [q2_vs_q1] 执行完成: 共识别 559 家异常客户，最大降幅客户为 4481（保费环比 -104.61%）
+2026-08-07 21:33:43,653 [INFO] app.configurable_engine: 开始执行规则表: q2_vs_q4 (2026Q2 vs 2025Q4 跨季对比)
+2026-08-07 21:33:43,668 [INFO] app.configurable_engine: [q2_vs_q4] 基期客户数=2185, 当期客户数=1966
+2026-08-07 21:33:43,676 [INFO] app.configurable_engine: [q2_vs_q4] 识别异常客户数=635
+2026-08-07 21:33:43,726 [INFO] app.configurable_engine: [q2_vs_q4] 执行完成: 共识别 635 家异常客户，最大降幅客户为 4481（保费环比 -104.49%）
+2026-08-07 21:33:43,727 [INFO] app.configurable_engine: 开始执行规则表: jul_vs_jun (2026年7月 vs 6月 月度环比)
+2026-08-07 21:33:43,738 [INFO] app.configurable_engine: [jul_vs_jun] 基期客户数=1632, 当期客户数=1587
+2026-08-07 21:33:43,746 [INFO] app.configurable_engine: [jul_vs_jun] 识别异常客户数=555
+2026-08-07 21:33:43,786 [INFO] app.configurable_engine: [jul_vs_jun] 执行完成: 共识别 555 家异常客户，最大降幅客户为 13225（保费环比 -107.73%）
+2026-08-07 21:33:43,787 [INFO] app.configurable_engine: 规则引擎执行完毕，共返回 3 张表结果
+2026-08-07 21:33:43,788 [INFO] anomaly_llm: 规则引擎分析完成: session=05f6fbce16094913a36fffa29aef6850, 结果表数=3
+2026-08-07 21:58:12,569 [INFO] app.rule_loader: 正在保存规则配置到: D:\joe-project\workspace\premium-analysis\backend\app\rules_config.json
+2026-08-07 21:58:12,573 [INFO] app.rule_loader: 规则配置保存成功
+2026-08-07 21:58:12,574 [INFO] anomaly_llm: 规则配置已更新
+2026-08-07 21:58:24,099 [INFO] app.configurable_engine: 规则引擎启动，共 3 张表规则，其中 3 张已启用
+2026-08-07 21:58:24,100 [INFO] app.configurable_engine: 开始执行规则表: q2_vs_q1 (2026Q2 vs 2026Q1 季度环比)
+2026-08-07 21:58:24,138 [INFO] app.configurable_engine: [q2_vs_q1] 基期客户数=2140, 当期客户数=1966
+2026-08-07 21:58:24,167 [INFO] app.configurable_engine: [q2_vs_q1] 识别异常客户数=382
+2026-08-07 21:58:24,266 [INFO] app.configurable_engine: [q2_vs_q1] 执行完成: 共识别 382 家异常客户，最大降幅客户为 4481（保费环比 -104.61%）
+2026-08-07 21:58:24,268 [INFO] app.configurable_engine: 开始执行规则表: q2_vs_q4 (2026Q2 vs 2025Q4 跨季对比)
+2026-08-07 21:58:24,304 [INFO] app.configurable_engine: [q2_vs_q4] 基期客户数=2185, 当期客户数=1966
+2026-08-07 21:58:24,320 [INFO] app.configurable_engine: [q2_vs_q4] 识别异常客户数=436
+2026-08-07 21:58:24,453 [INFO] app.configurable_engine: [q2_vs_q4] 执行完成: 共识别 436 家异常客户，最大降幅客户为 4481（保费环比 -104.49%）
+2026-08-07 21:58:24,455 [INFO] app.configurable_engine: 开始执行规则表: jul_vs_jun (2026年7月 vs 6月 月度环比)
+2026-08-07 21:58:24,489 [INFO] app.configurable_engine: [jul_vs_jun] 基期客户数=1632, 当期客户数=1587
+2026-08-07 21:58:24,505 [INFO] app.configurable_engine: [jul_vs_jun] 识别异常客户数=359
+2026-08-07 21:58:24,597 [INFO] app.configurable_engine: [jul_vs_jun] 执行完成: 共识别 359 家异常客户，最大降幅客户为 13225（保费环比 -107.73%）
+2026-08-07 21:58:24,598 [INFO] app.configurable_engine: 规则引擎执行完毕，共返回 3 张表结果
+2026-08-07 21:58:24,600 [INFO] anomaly_llm: 规则引擎分析完成: session=a899a218153941758e54dd433bf6fa52, 结果表数=3
+2026-08-07 22:02:20,682 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-07 22:02:32,718 [INFO] app.rule_loader: 正在加载规则配置文件: D:\joe-project\workspace\premium-analysis\backend\app\rules_config.json
+2026-08-07 22:02:32,720 [INFO] app.rule_loader: 规则配置加载成功，共 4 张表规则
+2026-08-07 22:05:00,059 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: a899a218153941758e54dd433bf6fa52
+2026-08-07 22:06:19,106 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:08:33,813 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:11:15,993 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:12:08,068 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:12:08,130 [INFO] app.configurable_engine: 规则引擎启动，共 4 张表规则，其中 4 张已启用
+2026-08-07 22:12:08,131 [INFO] app.configurable_engine: 开始执行规则表: q2_vs_q1 (2026Q2 vs 2026Q1 季度环比)
+2026-08-07 22:12:08,147 [INFO] app.configurable_engine: [q2_vs_q1] 基期客户数=2140, 当期客户数=1966
+2026-08-07 22:12:08,155 [INFO] app.configurable_engine: [q2_vs_q1] 识别异常客户数=382
+2026-08-07 22:12:08,183 [INFO] app.configurable_engine: [q2_vs_q1] 执行完成: 共识别 382 家异常客户，最大降幅客户为 4481（保费环比 -104.61%）
+2026-08-07 22:12:08,185 [INFO] app.configurable_engine: 开始执行规则表: q2_vs_q4 (2026Q2 vs 2025Q4 跨季对比)
+2026-08-07 22:12:08,198 [INFO] app.configurable_engine: [q2_vs_q4] 基期客户数=2185, 当期客户数=1966
+2026-08-07 22:12:08,205 [INFO] app.configurable_engine: [q2_vs_q4] 识别异常客户数=436
+2026-08-07 22:12:08,249 [INFO] app.configurable_engine: [q2_vs_q4] 执行完成: 共识别 436 家异常客户，最大降幅客户为 4481（保费环比 -104.49%）
+2026-08-07 22:12:08,252 [INFO] app.configurable_engine: 开始执行规则表: jul_vs_jun (2026年7月 vs 6月 月度环比)
+2026-08-07 22:12:08,265 [INFO] app.configurable_engine: [jul_vs_jun] 基期客户数=1632, 当期客户数=1587
+2026-08-07 22:12:08,274 [INFO] app.configurable_engine: [jul_vs_jun] 识别异常客户数=359
+2026-08-07 22:12:08,303 [INFO] app.configurable_engine: [jul_vs_jun] 执行完成: 共识别 359 家异常客户，最大降幅客户为 13225（保费环比 -107.73%）
+2026-08-07 22:12:08,304 [INFO] app.configurable_engine: 执行客户峰值模板: customer_peak (客户峰值（最高保费/单量）)
+2026-08-07 22:12:08,422 [INFO] app.configurable_engine: [customer_peak] 客户峰值模板完成: 共 3010 位客户，最高保费客户为 3799（保费 452911.54，单量 43）
+2026-08-07 22:12:08,425 [INFO] app.configurable_engine: 规则引擎执行完毕，共返回 4 张表结果
+2026-08-07 22:12:08,426 [INFO] anomaly_llm: 规则引擎分析完成: session=9ebb2ed198364e1388064cd93e655fc2, 结果表数=4
+2026-08-07 22:14:09,284 [INFO] anomaly_llm: 动态月份范围: 2025-01 ~ 2026-07，共 19 个月
+2026-08-07 22:14:15,833 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:14:17,159 [INFO] anomaly_llm: 月份过滤: 原始 32409 行 -> 过滤后 32409 行（所需月份 19 个）
+2026-08-07 22:14:17,279 [INFO] anomaly_llm: 月度明细 CSV 字符数: 750736（阈值 100000）
+2026-08-07 22:14:17,282 [INFO] anomaly_llm: 月度明细 CSV（750736 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 22:14:17,489 [INFO] anomaly_llm: 降级CSV附加月度明细: 3219 行（2026-06, 2026-07）
+2026-08-07 22:14:17,492 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 367709（14124 行聚合 + 3219 行月度明细）
+2026-08-07 22:14:17,500 [INFO] anomaly_llm: 开始 LLM 流式分析: session=9ebb2ed198364e1388064cd93e655fc2 model=qwen-plus csv_chars=367709 enable_thinking=False max_tokens=16384
+2026-08-07 22:15:24,480 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 22:21:01,603 [INFO] anomaly_llm: LLM 流式分析完成: session=9ebb2ed198364e1388064cd93e655fc2
+2026-08-07 22:22:06,821 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:23:02,156 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 69 字符）
+2026-08-07 22:55:00,045 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:59:38,940 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-07 22:59:41,569 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 22:59:42,082 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-07 22:59:42,134 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-07 22:59:42,136 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 22:59:42,219 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-07 22:59:42,223 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-07 22:59:42,228 [INFO] anomaly_llm: 开始 LLM 流式分析: session=92989a4783de46ef8daaf8cdbfeb8f59 model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-07 23:00:07,872 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 23:01:01,990 [INFO] anomaly_llm: LLM 流式分析完成: session=92989a4783de46ef8daaf8cdbfeb8f59
+2026-08-07 23:06:33,560 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:08:51,938 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:16:13,196 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-07 23:16:15,842 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:16:16,358 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-07 23:16:16,408 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-07 23:16:16,409 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 23:16:16,494 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-07 23:16:16,497 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-07 23:16:16,501 [INFO] anomaly_llm: 开始 LLM 流式分析: session=1521c32aa7194409b33d1db96b082058 model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-07 23:16:42,235 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 23:17:58,871 [INFO] anomaly_llm: LLM 流式分析完成: session=1521c32aa7194409b33d1db96b082058
+2026-08-07 23:21:28,958 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 4 字符）
+2026-08-07 23:21:43,317 [WARNING] anomaly_llm: 未能匹配到 DEFAULT_PROMPT 模式，文件未更新
+2026-08-07 23:22:28,571 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 11 字符）
+2026-08-07 23:28:00,590 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:30:34,504 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 106 字符）
+2026-08-07 23:31:28,912 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 137 字符）
+2026-08-07 23:31:29,248 [WARNING] anomaly_llm: 未能匹配到 DEFAULT_PROMPT 模式，文件未更新
+2026-08-07 23:31:34,042 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-07 23:31:36,456 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:31:36,945 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-07 23:31:36,995 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-07 23:31:36,997 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 23:31:37,149 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-07 23:31:37,152 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-07 23:31:37,156 [INFO] anomaly_llm: 开始 LLM 流式分析: session=9fd7ca05027e4c709ea38508d5107edf model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-07 23:32:02,912 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 23:33:28,078 [INFO] anomaly_llm: LLM 流式分析完成: session=9fd7ca05027e4c709ea38508d5107edf
+2026-08-07 23:37:56,003 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 1533 字符）
+2026-08-07 23:38:37,269 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 134 字符）
+2026-08-07 23:39:02,674 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-07 23:39:04,909 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:39:05,381 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-07 23:39:05,427 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-07 23:39:05,429 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 23:39:05,503 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-07 23:39:05,506 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-07 23:39:05,511 [INFO] anomaly_llm: 开始 LLM 流式分析: session=9fd7ca05027e4c709ea38508d5107edf model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-07 23:39:31,417 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 23:40:43,487 [INFO] anomaly_llm: LLM 流式分析完成: session=9fd7ca05027e4c709ea38508d5107edf
+2026-08-07 23:42:11,821 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 134 字符）
+2026-08-07 23:48:22,592 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-07 23:48:25,028 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:48:25,529 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-07 23:48:25,576 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-07 23:48:25,579 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 23:48:25,655 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-07 23:48:25,659 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-07 23:48:25,662 [INFO] anomaly_llm: 开始 LLM 流式分析: session=9fd7ca05027e4c709ea38508d5107edf model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-07 23:48:51,384 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 23:50:38,485 [INFO] anomaly_llm: LLM 流式分析完成: session=9fd7ca05027e4c709ea38508d5107edf
+2026-08-07 23:55:01,021 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-07 23:55:03,795 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-07 23:55:04,319 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-07 23:55:04,374 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-07 23:55:04,377 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-07 23:55:04,469 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-07 23:55:04,474 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-07 23:55:04,478 [INFO] anomaly_llm: 开始 LLM 流式分析: session=9fd7ca05027e4c709ea38508d5107edf model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-07 23:55:30,224 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-07 23:57:03,683 [INFO] anomaly_llm: LLM 流式分析完成: session=9fd7ca05027e4c709ea38508d5107edf
+2026-08-07 23:57:41,262 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 1020 字符）
+2026-08-08 07:33:18,463 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-08 07:34:31,710 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-08 07:34:33,903 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-08 07:34:34,311 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-08 07:34:34,432 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-08 07:34:34,458 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-08 07:34:34,557 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-08 07:34:34,559 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-08 07:34:34,561 [INFO] anomaly_llm: 开始 LLM 流式分析: session=c1715a5d0b594766a62c9deb9f717082 model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-08 07:35:00,378 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 07:36:49,056 [INFO] anomaly_llm: LLM 流式分析完成: session=c1715a5d0b594766a62c9deb9f717082
+2026-08-09 14:40:13,507 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 14:40:36,833 [INFO] anomaly_llm: 提示词已保存到 prompts.py（长度 915 字符）
+2026-08-09 14:40:40,673 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-09 14:40:43,084 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 14:40:43,572 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-09 14:40:43,620 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271286（阈值 100000）
+2026-08-09 14:40:43,622 [INFO] anomaly_llm: 月度明细 CSV（271286 字符）超过阈值（100000），降级为季度聚合数据
+2026-08-09 14:40:43,711 [INFO] anomaly_llm: 降级CSV附加月度明细: 3210 行（2026-06, 2026-07）
+2026-08-09 14:40:43,714 [INFO] anomaly_llm: 季度聚合 CSV 字符数: 192257（5676 行聚合 + 3210 行月度明细）
+2026-08-09 14:40:43,718 [INFO] anomaly_llm: 开始 LLM 流式分析: session=8498f883b5cd4d05abd5c917d00cb190 model=qwen-plus csv_chars=192257 enable_thinking=False max_tokens=16384
+2026-08-09 14:41:09,770 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-09 14:43:11,271 [INFO] anomaly_llm: LLM 流式分析完成: session=8498f883b5cd4d05abd5c917d00cb190
+2026-08-09 14:49:13,137 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 14:49:23,160 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 14:50:54,896 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: 8498f883b5cd4d05abd5c917d00cb190
+2026-08-09 14:51:34,778 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 14:51:59,965 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-09 14:52:02,571 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 14:52:03,037 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-09 14:52:03,086 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271323
+2026-08-09 14:52:03,089 [INFO] anomaly_llm: 开始 LLM 流式分析: session=3ba4698c0d8044a2b8e9a920af1f1131 model=qwen-max csv_chars=271323 enable_thinking=False max_tokens=16384
+2026-08-09 14:52:04,136 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-09 14:52:04,141 [INFO] anomaly_llm: LLM 流式分析完成: session=3ba4698c0d8044a2b8e9a920af1f1131
+2026-08-09 14:52:30,801 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-09 14:52:33,212 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 14:52:33,692 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-09 14:52:33,745 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271323
+2026-08-09 14:52:33,748 [INFO] anomaly_llm: 开始 LLM 流式分析: session=3ba4698c0d8044a2b8e9a920af1f1131 model=qwen-max csv_chars=271323 enable_thinking=False max_tokens=16384
+2026-08-09 14:52:34,557 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-09 14:52:34,562 [INFO] anomaly_llm: LLM 流式分析完成: session=3ba4698c0d8044a2b8e9a920af1f1131
+2026-08-09 14:56:35,293 [INFO] anomaly_llm: anomaly/stream 会话不存在或已过期: test-nonexist
+2026-08-09 14:59:22,890 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 14:59:22,890 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:00:39,434 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:01:50,475 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:01:50,509 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:01:50,519 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:06:55,871 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:06:55,922 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:06:55,956 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:08:41,957 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 15:09:31,742 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-09 15:09:34,173 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 15:09:34,658 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-09 15:09:34,706 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271323
+2026-08-09 15:09:34,708 [INFO] anomaly_llm: 开始 LLM 流式分析: session=befb12066822493ea4a634324ebc6b1c model=qwen3.7-plus csv_chars=271323 enable_thinking=False max_tokens=8192
+2026-08-09 15:09:45,676 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-09 15:10:27,549 [INFO] anomaly_llm: LLM 流式分析完成: session=befb12066822493ea4a634324ebc6b1c
+2026-08-09 15:23:49,403 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-09 15:23:51,785 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 15:23:52,264 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-09 15:23:52,316 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271323
+2026-08-09 15:23:52,318 [INFO] anomaly_llm: 开始 LLM 流式分析: session=befb12066822493ea4a634324ebc6b1c model=qwen3.7-plus csv_chars=271323 enable_thinking=False max_tokens=8192
+2026-08-09 15:24:03,125 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-09 15:24:54,627 [INFO] anomaly_llm: LLM 流式分析完成: session=befb12066822493ea4a634324ebc6b1c
+2026-08-09 15:25:33,863 [INFO] app.session_store: 用户提示词已保存到 D:\joe-project\workspace\premium-analysis\backend\app\user_prompt.json（900 字符）
+2026-08-09 15:25:33,864 [INFO] anomaly_llm: 提示词已保存到 user_prompt.json（长度 900 字符）
+2026-08-09 15:26:46,373 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-09 15:26:48,852 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 15:26:49,342 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-09 15:26:49,388 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271323
+2026-08-09 15:26:49,391 [INFO] anomaly_llm: 开始 LLM 流式分析: session=befb12066822493ea4a634324ebc6b1c model=qwen3.7-plus csv_chars=271323 enable_thinking=False max_tokens=8192
+2026-08-09 15:27:01,977 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-09 15:28:02,651 [INFO] anomaly_llm: LLM 流式分析完成: session=befb12066822493ea4a634324ebc6b1c
+2026-08-09 15:30:59,674 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 15:31:26,736 [INFO] app.session_store: 用户提示词已保存到 D:\joe-project\workspace\premium-analysis\backend\app\user_prompt.json（866 字符）
+2026-08-09 15:31:26,738 [INFO] anomaly_llm: 提示词已保存到 user_prompt.json（长度 866 字符）
+2026-08-09 15:31:31,550 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-09 15:31:33,980 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-09 15:31:34,463 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-09 15:31:34,511 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271323
+2026-08-09 15:31:34,513 [INFO] anomaly_llm: 开始 LLM 流式分析: session=f7892c70fe8541caa62d64de7713c875 model=qwen3.7-plus csv_chars=271323 enable_thinking=False max_tokens=8192
+2026-08-09 15:31:45,421 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-09 15:32:37,681 [INFO] anomaly_llm: LLM 流式分析完成: session=f7892c70fe8541caa62d64de7713c875
+2026-08-09 15:38:11,664 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:38:11,675 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-09 15:38:11,677 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-10 09:29:47,826 [INFO] app.logging_setup: 日志初始化完成，日志目录: D:\joe-project\workspace\premium-analysis\backend\logs
+2026-08-10 09:35:03,186 [INFO] app.session_store: 已保存用户确认的 mapping: session=f7acbe8d60ca42f9a9f92b37f391d00c, mapping={'customer': '客户代码', 'date': '签单时间', 'premium': '保费量', 'policies': '出单量'}
+2026-08-10 09:35:05,344 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-10 09:35:12,643 [INFO] anomaly_llm: 动态月份范围: 2026-01 ~ 2026-07，共 7 个月
+2026-08-10 09:35:12,646 [INFO] anomaly_llm: 使用用户确认的 mapping: session=f7acbe8d60ca42f9a9f92b37f391d00c, mapping={'customer': '客户代码', 'date': '签单时间', 'premium': '保费量', 'policies': '出单量'}
+2026-08-10 09:35:14,868 [INFO] app.parser: 识别到 0 个额外业务列: []
+2026-08-10 09:35:15,371 [INFO] anomaly_llm: 月份过滤: 原始 11682 行 -> 过滤后 11682 行（所需月份 7 个）
+2026-08-10 09:35:15,422 [INFO] anomaly_llm: 月度明细 CSV 字符数: 271323
+2026-08-10 09:35:15,424 [INFO] anomaly_llm: 开始 LLM 流式分析: session=f7acbe8d60ca42f9a9f92b37f391d00c model=qwen3.7-plus csv_chars=271323 enable_thinking=False max_tokens=8192
+2026-08-10 09:35:26,252 [INFO] httpx: HTTP Request: POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 09:36:16,620 [INFO] anomaly_llm: LLM 流式分析完成: session=f7acbe8d60ca42f9a9f92b37f391d00c
