@@ -10,6 +10,13 @@
       description="规则异常分析将使用模拟数据展示，需设置 VITE_USE_MOCK=false 并连接真实后端。"
     />
 
+    <!-- 当前分析范围提示（与业绩分析筛选联动） -->
+    <div v-if="rangeText" class="range-bar">
+      <el-icon><Calendar /></el-icon>
+      <span>当前分析范围：<strong>{{ rangeText }}</strong></span>
+      <span class="range-hint">（跟随业绩分析页的起止期筛选）</span>
+    </div>
+
     <!-- 顶部操作栏 -->
     <div class="action-bar">
       <el-button type="primary" :loading="analyzing" :disabled="!sessionId" @click="runAnalysis">
@@ -97,14 +104,30 @@
       <!-- 空状态：未分析时显示 -->
       <el-empty v-if="!tables.length && !analyzing && !errorMsg" description="点击上方「开始分析」按钮进行规则异常分析" />
 
-      <!-- 多表 Tab 展示 -->
-      <el-tabs v-if="tables.length" v-model="activeTableId" class="result-tabs">
-        <el-tab-pane
+      <!-- 多表切换：横向铺开按钮（全部模板可见，一行放不下时自动换行） -->
+      <div v-if="tables.length" class="result-tab-bar" role="tablist" aria-label="分析结果表切换">
+        <div
           v-for="table in tables"
           :key="table.id"
-          :label="table.name"
-          :name="table.id"
+          class="result-tab-btn"
+          :class="{ active: table.id === activeTableId }"
+          :data-tab-id="table.id"
+          role="tab"
+          :tabindex="table.id === activeTableId ? 0 : -1"
+          :aria-selected="table.id === activeTableId ? 'true' : 'false'"
+          @click="switchResultTable(table.id)"
+          @keydown.enter.prevent="switchResultTable(table.id)"
+          @keydown.space.prevent="switchResultTable(table.id)"
+          @keydown.arrow-right.prevent="moveResultFocus(1)"
+          @keydown.arrow-left.prevent="moveResultFocus(-1)"
+          :title="table.name"
         >
+          {{ table.name }}
+        </div>
+      </div>
+
+      <!-- 当前激活表内容 -->
+      <div v-for="table in tables" :key="table.id" v-show="table.id === activeTableId" class="result-table-pane">
           <!-- 摘要行 -->
           <el-alert
             type="info"
@@ -169,15 +192,15 @@
             layout="total, prev, pager, next"
             @current-change="(p) => onPageChange(table.id, p)"
           />
-        </el-tab-pane>
-      </el-tabs>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, nextTick, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Calendar } from '@element-plus/icons-vue'
 
 // ===================== Props =====================
 const props = defineProps({
@@ -232,12 +255,12 @@ function isPercentCol(col) {
   return /环比|%/.test(col)
 }
 
-/** 百分比数值颜色：下降红色(#F56C6C)，上升绿色(#67C23A) */
+/** 百分比数值颜色：下降红色(#ff3b30)，上升绿色(#34c759) */
 function percentColor(val) {
   if (val == null) return ''
   const num = parseFloat(val)
   if (isNaN(num)) return ''
-  return num < 0 ? '#F56C6C' : num > 0 ? '#67C23A' : ''
+  return num < 0 ? '#ff3b30' : num > 0 ? '#34c759' : ''
 }
 
 /** 格式化百分比显示 */
@@ -267,6 +290,23 @@ function getPagedRows(table) {
 /** 分页页码变更处理 */
 function onPageChange(tableId, page) {
   pageMap[tableId] = page
+}
+
+/** 切换到指定结果表（同步更新 roving tabindex 焦点语义） */
+function switchResultTable(tableId) {
+  activeTableId.value = tableId
+}
+
+/** 键盘方向键在结果表 Tab 间移动焦点（箭头键导航，仅移动焦点不切换） */
+function moveResultFocus(step) {
+  const idx = tables.value.findIndex((t) => t.id === activeTableId.value)
+  const nextIdx = (idx + step + tables.value.length) % tables.value.length
+  const nextId = tables.value[nextIdx]?.id
+  if (!nextId) return
+  // 更新 active 跟随焦点（结果区同步切换，交互更流畅）
+  activeTableId.value = nextId
+  const el = document.querySelector(`.result-tab-btn[data-tab-id="${nextId}"]`)
+  el?.focus()
 }
 
 // ===================== Mock 数据生成 =====================
@@ -426,6 +466,11 @@ async function runAnalysis() {
       await new Promise(r => setTimeout(r, 800))
       tables.value = generateMockData()
       activeTableId.value = tables.value[0]?.id || ''
+      nextTick(() => {
+        if (tables.value[0]) {
+          document.querySelector(`.result-tab-btn[data-tab-id="${tables.value[0].id}"]`)?.focus()
+        }
+      })
       ElMessage.success('Mock 模式：分析完成（模拟数据）')
       return
     }
@@ -450,6 +495,10 @@ async function runAnalysis() {
     tables.value = data.tables || []
     if (tables.value.length) {
       activeTableId.value = tables.value[0].id
+      // 分析完成后将焦点移到首个结果 Tab，方便键盘继续操作
+      nextTick(() => {
+        document.querySelector(`.result-tab-btn[data-tab-id="${tables.value[0].id}"]`)?.focus()
+      })
     }
     ElMessage.success('规则分析完成，共生成 ' + tables.value.length + ' 张规则表')
   } catch (err) {
@@ -501,6 +550,19 @@ function exportAllExcel() {
 
 // ===================== 生命周期 =====================
 
+/** 当前分析范围文案（来自业绩分析筛选） */
+const rangeText = computed(() => {
+  if (!props.startMonth && !props.endMonth) return ''
+  return `${props.startMonth || '-'} ~ ${props.endMonth || '-'}`
+})
+
+// 首次进入自动执行规则分析（有会话时），减少一次手动点击；可随时用按钮重跑
+onMounted(() => {
+  if (props.sessionId) {
+    runAnalysis()
+  }
+})
+
 // 监听配置面板展开时自动加载规则配置
 watch(configCollapsed, (val) => {
   if (!val && !rulesConfig.value.length) {
@@ -520,6 +582,27 @@ watch(configCollapsed, (val) => {
   margin-bottom: var(--spacing-md);
   flex-wrap: wrap;
 }
+
+/* 分析范围提示条 */
+.range-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--fs-sm);
+  color: var(--color-text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: var(--spacing-md);
+}
+.range-bar .el-icon {
+  color: var(--color-primary);
+}
+.range-bar .range-hint {
+  color: var(--color-text-muted);
+}
 .rule-anomaly-panel .rule-config-collapse {
   margin-bottom: var(--spacing-md);
   border: 1px solid var(--color-border-light);
@@ -532,8 +615,40 @@ watch(configCollapsed, (val) => {
 .rule-anomaly-panel .result-area {
   min-height: 200px;
 }
-.rule-anomaly-panel .result-tabs {
-  margin-top: 0;
+
+/* ---- 结果表切换按钮（横向铺开） ---- */
+.result-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: var(--spacing-md);
+}
+.result-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  background: #f5f5f7;
+  color: #6e6e73;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  user-select: none;
+}
+.result-tab-btn:hover {
+  background: #e8e8ed;
+}
+.result-tab-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.result-tab-btn.active {
+  background: #0066cc;
+  color: #fff;
+  border-color: #0066cc;
+  font-weight: 600;
 }
 .rule-anomaly-panel .summary-alert {
   margin-bottom: var(--spacing-sm);

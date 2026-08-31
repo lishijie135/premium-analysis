@@ -1,11 +1,35 @@
 <template>
   <div class="ai-chat-panel">
+    <!-- 当前分析范围提示（与业绩分析筛选联动） -->
+    <div v-if="rangeText" class="chat-scope">
+      <span class="scope-icon">
+        <el-icon><Calendar /></el-icon>
+      </span>
+      <span class="scope-label">对话范围：</span>
+      <strong class="scope-range">{{ rangeText }}</strong>
+      <span class="scope-hint">（跟随业绩分析页的起止期筛选）</span>
+      <span class="scope-meta">已分析 · {{ messages.length }} 条会话</span>
+    </div>
+
     <!-- 消息列表区 -->
     <div class="chat-messages" ref="messagesContainer">
-      <!-- 空状态提示 -->
+      <!-- 空状态提示 + 快捷问题 -->
       <div v-if="messages.length === 0" class="chat-empty">
-        <p>基于上传的数据，向我提问吧</p>
-        <p class="chat-hint">例如：7月份保费最高的客户有哪些？</p>
+        <span class="empty-badge"><span class="badge-dot"></span>AI Assistant · qwen3 本地推理</span>
+        <p class="empty-title">基于已上传的数据，向我提问吧</p>
+        <span class="empty-example"><span class="example-tag">例如</span>7 月份保费最高的客户有哪些？</span>
+        <div class="quick-questions" role="group" aria-label="快捷问题">
+          <button
+            v-for="q in quickQuestions"
+            :key="q"
+            type="button"
+            class="quick-question-chip"
+            :disabled="streaming"
+            @click="sendQuickQuestion(q)"
+          >
+            {{ q }}
+          </button>
+        </div>
       </div>
       <!-- 历史消息 -->
       <div
@@ -57,27 +81,87 @@
       <div v-if="streaming" class="chat-message chat-assistant">
         <div class="message-avatar">AI</div>
         <div class="message-content">
-          <div class="md-body" v-html="streamingContent"></div>
-          <span class="typing-cursor">|</span>
+          <!-- Agent 执行过程面板（代码生成 / 执行中） -->
+          <div v-if="chatAgentCode || chatAgentPhase" class="chat-agent-panel">
+            <div class="chat-agent-phase">
+              <el-icon v-if="chatAgentPhase === 'generating' || chatAgentPhase === 'executing'" class="is-loading"><Loading /></el-icon>
+              <span>
+                {{ chatAgentPhase === 'generating' ? '🤖 正在生成分析代码...' :
+                   chatAgentPhase === 'executing' ? '⚙️ 正在执行数据分析...' :
+                   chatAgentPhase === 'interpreting' ? '📝 正在撰写回答...' :
+                   chatAgentMessage || '准备中...' }}
+              </span>
+            </div>
+            <el-collapse v-if="chatAgentCode" v-model="chatCodeCollapse">
+              <el-collapse-item title="查看分析代码" name="code">
+                <pre class="chat-agent-code"><code>{{ chatAgentCode }}</code></pre>
+              </el-collapse-item>
+              <el-collapse-item v-if="chatExecResult" title="查看执行结果" name="result">
+                <pre class="chat-agent-result"><code>{{ formatChatExecResult }}</code></pre>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+          <!-- Markdown 流式渲染 -->
+          <div v-if="streamingContent" class="md-body" v-html="streamingContent"></div>
+          <span v-if="streamingContent && chatAgentPhase === 'interpreting'" class="typing-cursor">|</span>
         </div>
       </div>
     </div>
 
     <!-- 底部输入区 -->
     <div class="chat-input-area">
-      <el-button size="small" @click="clearChat" :disabled="streaming || messages.length === 0">清空对话</el-button>
-      <el-input
-        v-model="inputMessage"
-        placeholder="输入你的问题..."
-        @keyup.enter="sendMessage"
-        :disabled="streaming"
-        class="chat-input"
-      />
-      <el-button v-if="streaming" type="danger" size="small" @click="stopStreaming">
-        <el-icon><VideoPause /></el-icon>
-        <span>停止回答</span>
-      </el-button>
-      <el-button v-else type="primary" @click="sendMessage" :disabled="!inputMessage.trim()">发送</el-button>
+      <div class="chat-footer">
+        <span class="ready-dot"></span>
+        <span class="ready-text">上下文已就绪，将基于上传的 Excel 数据作答</span>
+        <span class="footer-right">
+          <button
+            type="button"
+            class="clear-btn"
+            @click="clearChat"
+            :disabled="streaming || messages.length === 0"
+          >清空对话</button>
+          <span class="kbd-hint">⌘&nbsp;Enter 发送</span>
+        </span>
+      </div>
+      <div class="chat-input-row">
+        <el-tooltip content="开启新会话" placement="top">
+          <button type="button" class="new-chat-btn" @click="refreshSession" :disabled="streaming">
+            <span class="new-chat-plus">＋</span>
+            <span>新会话</span>
+          </button>
+        </el-tooltip>
+        <span class="row-divider"></span>
+        <el-input
+          ref="inputRef"
+          v-model="inputMessage"
+          placeholder="请输入你的问题..."
+          @keyup.enter="sendMessage"
+          @keydown.ctrl.enter.prevent="sendMessage"
+          @keydown.meta.enter.prevent="sendMessage"
+          :disabled="streaming"
+          class="chat-input"
+          :aria-label="'输入问题，按回车或 ⌘+Enter 发送'"
+        />
+        <button
+          v-if="streaming"
+          type="button"
+          class="stop-btn"
+          @click="stopStreaming"
+        >
+          <el-icon><VideoPause /></el-icon>
+          <span>停止回答</span>
+        </button>
+        <button
+          v-else
+          type="button"
+          class="send-btn"
+          @click="sendMessage"
+          :disabled="!inputMessage.trim()"
+        >
+          <span>发送</span>
+          <span class="send-arrow">→</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -88,11 +172,12 @@
  * 支持 SSE 流式输出、Markdown 渲染、对话清空
  * 新增功能：重新发送、复制结果、导出 PDF、单条消息复制/导出
  */
-import { ref, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { RefreshRight, CopyDocument, Printer, DocumentCopy, Download, VideoPause } from '@element-plus/icons-vue'
+import { RefreshRight, CopyDocument, Printer, DocumentCopy, Download, VideoPause, Loading, Calendar } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { clearChat as apiClearChat, isMockMode } from '../api/client.js'
+import { exportMarkdownToPDF } from '../utils/pdf.js'
 
 // marked 配置：GFM 表格 + 换行（与 AiAnomalyPanel 一致）
 marked.setOptions({ gfm: true, breaks: true })
@@ -103,13 +188,57 @@ const props = defineProps({
   endMonth: { type: String, default: '' },    // "YYYY-MM" 格式
 })
 
+/** 对话范围文案（来自业绩分析筛选） */
+const rangeText = computed(() => {
+  if (!props.startMonth && !props.endMonth) return ''
+  return `${props.startMonth || '-'} ~ ${props.endMonth || '-'}`
+})
+
 // ---- 响应式状态 ----
 const messages = ref([])           // 对话消息列表
 const inputMessage = ref('')       // 输入框内容
 const streaming = ref(false)       // 是否正在流式输出
 const streamingContent = ref('')   // 流式输出中的 HTML 内容
 const messagesContainer = ref(null) // 消息列表容器 ref
+const inputRef = ref(null)         // 输入框 ref（自动聚焦）
 const abortController = ref(null)  // 用于中断流式请求（ref 以支持停止按钮）
+
+/** 空状态下的快捷问题（直接作为用户消息发送） */
+const quickQuestions = [
+  '保费最高的月份有哪些？',
+  '保费环比下降最多的客户是谁？',
+  '本期内保费与出单量整体趋势如何？'
+]
+
+/** 快捷问题：直接发送 */
+function sendQuickQuestion(q) {
+  if (streaming.value || !q.trim()) return
+  inputMessage.value = q
+  sendMessage()
+}
+
+// 进入面板自动聚焦输入框，提升连续提问效率
+onMounted(() => {
+  nextTick(() => inputRef.value?.focus?.())
+})
+
+// ---- Code Interpreter Agent 状态 ----
+const chatAgentCode = ref('')      // 当前轮次生成的代码
+const chatAgentPhase = ref('')     // 当前阶段：'' | 'generating' | 'executing' | 'interpreting'
+const chatExecResult = ref('')     // 当前轮次代码执行结果
+const chatAgentMessage = ref('')   // Agent 执行状态消息
+const chatCodeCollapse = ref([])   // 折叠面板激活项
+
+// 格式化执行结果 JSON
+const formatChatExecResult = computed(() => {
+  if (!chatExecResult.value) return ''
+  try {
+    const obj = JSON.parse(chatExecResult.value)
+    return JSON.stringify(obj, null, 2)
+  } catch {
+    return chatExecResult.value
+  }
+})
 
 /** 滚动消息列表到底部 */
 function scrollToBottom() {
@@ -185,6 +314,12 @@ async function doStreamRequest(text) {
   streaming.value = true
   streamingContent.value = ''
   abortController.value = new AbortController()
+  // 重置 Agent 状态
+  chatAgentCode.value = ''
+  chatAgentPhase.value = ''
+  chatExecResult.value = ''
+  chatAgentMessage.value = ''
+  chatCodeCollapse.value = []
 
   let fullContent = '' // 累积的 Markdown 原文
 
@@ -232,6 +367,23 @@ async function doStreamRequest(text) {
               fullContent += event.content
               streamingContent.value = marked.parse(fullContent)
               scrollToBottom()
+            } else if (event.type === 'code') {
+              // Agent 阶段一：收到生成的代码
+              chatAgentCode.value = event.content
+              chatAgentPhase.value = 'executing'
+              scrollToBottom()
+            } else if (event.type === 'executing') {
+              // Agent 执行状态更新
+              chatAgentMessage.value = event.message
+              if (!chatAgentPhase.value) {
+                chatAgentPhase.value = 'generating'
+              }
+              scrollToBottom()
+            } else if (event.type === 'result') {
+              // Agent 阶段一：收到代码执行结果
+              chatExecResult.value = event.content
+              chatAgentPhase.value = 'interpreting'
+              scrollToBottom()
             } else if (event.type === 'error') {
               ElMessage.error(event.message || '分析出错')
             } else if (event.type === 'done') {
@@ -252,6 +404,8 @@ async function doStreamRequest(text) {
       rendered: marked.parse(fullContent),
     })
     streamingContent.value = ''
+    // 流结束后重置 Agent 阶段
+    chatAgentPhase.value = ''
   } catch (err) {
     if (err.name === 'AbortError') {
       // 手动停止，将已生成内容保存
@@ -268,6 +422,7 @@ async function doStreamRequest(text) {
   } finally {
     streaming.value = false
     abortController.value = null
+    chatAgentPhase.value = ''
     scrollToBottom()
   }
 }
@@ -346,35 +501,16 @@ async function copySingleMessage(index) {
 }
 
 /**
- * 导出单条 AI 回复为 PDF（通过打印对话框另存）
+ * 导出单条 AI 回复为 PDF（jsPDF 生成真正 PDF 表格，文字可复制）
  * @param {number} index - 消息在 messages 数组中的索引
  */
-function exportSingleToPDF(index) {
+async function exportSingleToPDF(index) {
   const msg = messages.value[index]
-  if (!msg) return
-  const htmlContent = marked.parse(msg.content || '')
-  const printWindow = window.open('', '_blank')
-  if (!printWindow) {
-    ElMessage.warning('请允许弹出窗口以导出 PDF')
+  if (!msg || !msg.content) {
+    ElMessage.warning('暂无内容可导出')
     return
   }
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>AI 回复</title>
-<style>
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; color: #333; }
-.ai-content { background: #f5f7fa; border-radius: 8px; padding: 16px; }
-table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
-th { background: #f0f0f0; }
-code { background: #f0f0f0; padding: 2px 4px; border-radius: 3px; }
-pre { background: #f6f8fa; padding: 12px; border-radius: 6px; overflow-x: auto; }
-</style></head><body>
-<h3>AI 回复</h3>
-<div class="ai-content">${htmlContent}</div>
-</body></html>`
-  printWindow.document.write(html)
-  printWindow.document.close()
-  printWindow.focus()
-  setTimeout(() => printWindow.print(), 300)
+  await exportMarkdownToPDF(msg.content, 'AI 回复')
 }
 
 
@@ -384,6 +520,22 @@ function escapeHtml(text) {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+/** 开启新会话：清空对话记录并重置所有状态 */
+async function refreshSession() {
+  if (streaming.value) return
+  try {
+    if (!isMockMode()) {
+      await apiClearChat(props.sessionId)
+    }
+    messages.value = []
+    streamingContent.value = ''
+    inputMessage.value = ''
+    ElMessage.success('已开始新会话')
+  } catch (err) {
+    ElMessage.error('重置失败：' + (err.message || '未知错误'))
+  }
 }
 
 /** 清空对话记录（Mock 模式直接清空，非 Mock 模式调用后端接口） */
@@ -411,16 +563,61 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* ---- 面板容器：flex 纵向布局，高度自适应父容器 ---- */
+/* ========================================
+   AI 对话面板 — Apple Design 风格重制
+   配色：Action Blue #0066cc / Ink #1d1d1f / Parchment #f5f5f7
+   ======================================== */
+
+/* 外层容器（ResultPage 的卡片）已提供边框与圆角，此处保持透明 */
 .ai-chat-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  font-size: var(--fs-base);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-light);
+  background: transparent;
   overflow: hidden;
+  font-family: var(--font-family);
+}
+
+/* ---- 对话范围提示条 ---- */
+.chat-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #7a7a7a;
+  background: #f5f5f7;
+  border-radius: 12px;
+  margin: 16px 16px 0;
+  padding: 12px 18px;
+}
+.scope-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.scope-icon .el-icon {
+  color: #0066cc;
+}
+.scope-range {
+  color: #1d1d1f;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.224px;
+}
+.scope-hint {
+  color: #a1a1a6;
+}
+.scope-meta {
+  margin-left: auto;
+  color: #a1a1a6;
+  font-size: 12px;
 }
 
 /* ---- 消息列表区：占据剩余高度，可滚动 ---- */
@@ -437,27 +634,112 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--color-text-muted);
-  font-size: var(--fs-base);
-  gap: var(--spacing-xs);
+  gap: 14px;
+  color: #7a7a7a;
 }
-.chat-empty .chat-hint {
-  font-size: var(--fs-sm);
-  color: var(--color-text-muted);
-  background: var(--bg-hover);
-  padding: var(--spacing-xs) var(--spacing-md);
-  border-radius: var(--radius-sm);
+.empty-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  color: #7a7a7a;
+  letter-spacing: -0.12px;
+}
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0066cc;
+}
+.empty-title {
+  font-size: 34px;
+  font-weight: 600;
+  color: #1d1d1f;
+  letter-spacing: -0.374px;
+  margin: 0;
+  text-align: center;
+}
+.empty-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fafafc;
+  border: 1px solid #f0f0f0;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: #1d1d1f;
+  letter-spacing: -0.224px;
+}
+.example-tag {
+  font-size: 13px;
+  color: #7a7a7a;
+  font-weight: 500;
+}
+
+/* ---- 快捷问题 ---- */
+.quick-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 10px;
+}
+.quick-question-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #1d1d1f;
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  padding: 11px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease,
+    background-color 0.2s ease;
+}
+.quick-question-chip:hover:not(:disabled) {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+.quick-question-chip:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.quick-question-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.quick-question-chip:focus-visible {
+  outline: 2px solid #0066cc;
+  outline-offset: 2px;
 }
 
 /* ---- 单条消息 ---- */
 .chat-message {
   display: flex;
-  gap: var(--spacing-sm);
-  margin-bottom: 12px;
+  gap: 12px;
+  margin-bottom: 14px;
   align-items: flex-start;
+  animation: message-in 0.22s ease;
+}
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-message {
+    animation: none;
+  }
 }
 
-/* 用户消息：右对齐 */
+/* 用户消息：右对齐，Ink 黑底白字 */
 .chat-message.chat-user {
   flex-direction: row-reverse;
 }
@@ -465,20 +747,20 @@ onBeforeUnmount(() => {
   align-items: flex-end;
 }
 .chat-message.chat-user .user-text {
-  background: #e8f0fe;
-  color: var(--color-text-primary);
-  border-radius: 12px 4px 12px 12px;
+  background: #1d1d1f;
+  color: #ffffff;
+  border-radius: 12px 3px 12px 12px;
   padding: 12px 16px;
   max-width: 85%;
   word-break: break-word;
   line-height: 1.6;
 }
 
-/* AI 消息：左对齐 */
+/* AI 消息：左对齐，Surface 底 Hairline 边 */
 .chat-message.chat-assistant .message-content .md-body {
-  background: #f8f9fa;
-  border-radius: 4px 12px 12px 12px;
-  border: 1px solid #e8eaed;
+  background: #fafafc;
+  border-radius: 3px 12px 12px 12px;
+  border: 1px solid #f0f0f0;
   padding: 12px 16px;
   max-width: 85%;
 }
@@ -491,16 +773,16 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--fs-sm);
+  font-size: 13px;
   font-weight: 600;
   flex-shrink: 0;
 }
 .chat-user .message-avatar {
-  background: var(--color-primary);
+  background: #1d1d1f;
   color: #fff;
 }
 .chat-assistant .message-avatar {
-  background: var(--color-success);
+  background: #0066cc;
   color: #fff;
 }
 
@@ -517,11 +799,11 @@ onBeforeUnmount(() => {
 }
 .message-actions .action-btn {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: #7a7a7a;
   padding: 2px 6px;
 }
 .message-actions .action-btn:hover {
-  color: var(--color-primary);
+  color: #0066cc;
 }
 .message-actions .action-btn .el-icon {
   margin-right: 2px;
@@ -531,7 +813,7 @@ onBeforeUnmount(() => {
 .typing-cursor {
   display: inline-block;
   animation: blink 1s step-end infinite;
-  color: var(--color-primary);
+  color: #0066cc;
   font-weight: 700;
   margin-left: 2px;
 }
@@ -540,50 +822,270 @@ onBeforeUnmount(() => {
   50% { opacity: 0; }
 }
 
-/* ---- 底部输入区：固定在底部 ---- */
+/* ---- 底部输入区 ---- */
 .chat-input-area {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: 12px 16px;
-  border-top: 1px solid #e8eaed;
-  background: var(--bg-card);
   flex-shrink: 0;
-}
-.chat-input-area .chat-input {
-  flex: 1;
+  padding: 0 16px 16px;
+  background: #ffffff;
 }
 
-/* ---- Markdown 内容样式（增强版） ---- */
+/* 状态提示行 */
+.chat-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 8px;
+}
+.ready-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34c759;
+  flex-shrink: 0;
+}
+.ready-text {
+  font-size: 12px;
+  color: #7a7a7a;
+  letter-spacing: -0.12px;
+}
+.footer-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.clear-btn {
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: #7a7a7a;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: inherit;
+  letter-spacing: -0.12px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+.clear-btn:hover:not(:disabled) {
+  color: #0066cc;
+  background: #f5f5f7;
+}
+.clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.kbd-hint {
+  font-size: 12px;
+  color: #a1a1a6;
+  letter-spacing: -0.12px;
+}
+
+/* 输入行：整体一个 pill 容器 */
+.chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fafafc;
+  border: 1px solid #e0e0e0;
+  border-radius: 999px;
+  padding: 10px 12px 10px 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.chat-input-row:focus-within {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12);
+}
+.row-divider {
+  width: 1px;
+  height: 24px;
+  background: #e0e0e0;
+  flex-shrink: 0;
+}
+
+/* 新会话按钮 */
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  color: #1d1d1f;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+.new-chat-btn:hover:not(:disabled) {
+  border-color: #0066cc;
+  color: #0066cc;
+}
+.new-chat-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.new-chat-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.new-chat-plus {
+  color: #0066cc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 输入框：透明融入 pill 容器 */
+.chat-input {
+  flex: 1;
+}
+.chat-input :deep(.el-input__wrapper) {
+  background: transparent;
+  box-shadow: none;
+  padding: 4px 6px;
+}
+.chat-input :deep(.el-input__inner) {
+  font-size: 17px;
+  color: #1d1d1f;
+  font-family: inherit;
+  letter-spacing: -0.374px;
+}
+.chat-input :deep(.el-input__inner)::placeholder {
+  color: #a1a1a6;
+}
+.chat-input :deep(.el-input__wrapper.is-disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 发送按钮 */
+.send-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  cursor: pointer;
+  background: #0066cc;
+  color: #ffffff;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+.send-btn:hover:not(:disabled) {
+  background: #0071e3;
+}
+.send-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.send-arrow {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* 停止回答按钮 */
+.stop-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  cursor: pointer;
+  background: #ff3b30;
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.stop-btn:hover {
+  background: #ff5147;
+}
+.stop-btn:active {
+  transform: scale(0.96);
+}
+
+/* ---- Markdown 内容样式（Apple 风格） ---- */
 .md-body {
   font-size: 14px;
   line-height: 1.8;
-  color: #202124;
+  color: #1d1d1f;
   word-break: break-word;
 }
 .md-body h1, .md-body h2, .md-body h3, .md-body h4 {
-  color: #1a73e8;
+  color: #1d1d1f;
   margin: 16px 0 8px;
   font-weight: 600;
+  letter-spacing: -0.374px;
 }
-.md-body h1 { font-size: 20px; border-bottom: 2px solid #e8eaed; padding-bottom: 6px; }
+.md-body h1 { font-size: 20px; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; }
 .md-body h2 { font-size: 18px; }
 .md-body h3 { font-size: 16px; }
 .md-body p { margin: 8px 0; }
 .md-body ul, .md-body ol { margin: 8px 0; padding-left: 24px; }
 .md-body li { margin: 4px 0; line-height: 1.7; }
 .md-body table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
-.md-body th { background: #f8f9fa; padding: 8px 12px; font-weight: 600; border: 1px solid #dadce0; text-align: left; color: #5f6368; white-space: nowrap; }
-.md-body td { padding: 6px 12px; border: 1px solid #e8eaed; }
+.md-body th { background: #f5f5f7; padding: 8px 12px; font-weight: 600; border: 1px solid #e8eaed; text-align: left; color: #7a7a7a; white-space: nowrap; }
+.md-body td { padding: 6px 12px; border: 1px solid #f0f0f0; }
 .md-body tr:nth-child(even) { background: #fafbfc; }
-.md-body tr:hover { background: #f0f4ff; }
-.md-body code { background: #f1f3f4; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'Consolas', 'Monaco', monospace; }
-.md-body pre { background: #f6f8fa; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #e8eaed; }
+.md-body tr:hover { background: #f0f6ff; }
+.md-body code { background: #f5f5f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; }
+.md-body pre { background: #f5f5f7; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; border: 1px solid #f0f0f0; }
 .md-body pre code { background: none; padding: 0; }
-.md-body blockquote { border-left: 3px solid #1a73e8; padding: 8px 12px; color: #5f6368; margin: 8px 0; background: #f8f9fa; border-radius: 0 4px 4px 0; }
-.md-body strong { color: #202124; font-weight: 600; }
-.md-body em { color: #5f6368; }
-.md-body hr { border: none; border-top: 1px solid #e8eaed; margin: 16px 0; }
-.md-body a { color: #1a73e8; text-decoration: none; }
+.md-body blockquote { border-left: 3px solid #0066cc; padding: 8px 12px; color: #7a7a7a; margin: 8px 0; background: #f5f5f7; border-radius: 0 4px 4px 0; }
+.md-body strong { color: #1d1d1f; font-weight: 600; }
+.md-body em { color: #7a7a7a; }
+.md-body hr { border: none; border-top: 1px solid #f0f0f0; margin: 16px 0; }
+.md-body a { color: #0066cc; text-decoration: none; }
 .md-body a:hover { text-decoration: underline; }
+
+/* ---- Chat Agent 执行过程面板 ---- */
+.chat-agent-panel {
+  background: #f5f5f7;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.chat-agent-phase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #7a7a7a;
+  font-weight: 500;
+}
+.chat-agent-code,
+.chat-agent-result {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 250px;
+  overflow-y: auto;
+  margin: 0;
+}
+.chat-agent-code code,
+.chat-agent-result code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
 </style>

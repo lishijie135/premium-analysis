@@ -1,13 +1,20 @@
 <template>
-  <div>
+  <div class="trend-chart">
     <h3 class="card-title">业绩趋势</h3>
-    <div ref="chartRef" class="chart-box" style="height: 480px"></div>
+    <div class="chart-wrap" :class="{ 'has-empty': !data.length }">
+      <div ref="chartRef" class="chart-box"></div>
+      <div v-if="!data.length" class="chart-empty">
+        <el-icon><DataLine /></el-icon>
+        <span>暂无趋势数据</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
+import { DataLine } from '@element-plus/icons-vue'
 import { fmtMoney } from '../utils/format'
 
 const props = defineProps({
@@ -53,7 +60,7 @@ function buildOption(rows) {
         yAxisIndex: 0,
         data: rows.map((r) => r.premium),
         smooth: true,
-        itemStyle: { color: '#409eff' }
+        itemStyle: { color: '#0066cc' }
       },
       {
         name: '出单量',
@@ -61,7 +68,7 @@ function buildOption(rows) {
         xAxisIndex: 0,
         yAxisIndex: 1,
         data: rows.map((r) => r.policies),
-        itemStyle: { color: '#a0cfff' }
+        itemStyle: { color: '#99c7f0' }
       },
       {
         name: '新增客户',
@@ -69,7 +76,7 @@ function buildOption(rows) {
         xAxisIndex: 1,
         yAxisIndex: 2,
         data: rows.map((r) => r.new_customers),
-        itemStyle: { color: '#67c23a' }
+        itemStyle: { color: '#34c759' }
       },
       {
         name: '活跃客户',
@@ -77,7 +84,7 @@ function buildOption(rows) {
         xAxisIndex: 1,
         yAxisIndex: 2,
         data: rows.map((r) => r.active_customers),
-        itemStyle: { color: '#e6a23c' }
+        itemStyle: { color: '#ff9f0a' }
       }
     ]
   }
@@ -106,3 +113,37 @@ onBeforeUnmount(() => {
   chart = null
 })
 </script>
+
+<style scoped>
+.trend-chart .chart-wrap {
+  position: relative;
+  height: 480px;
+}
+.trend-chart .chart-box {
+  width: 100%;
+  height: 100%;
+}
+.trend-chart .chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: var(--fs-base);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+.trend-chart .chart-empty .el-icon {
+  font-size: 32px;
+}
+/* 移动端降低图表高度，减少滚动距离 */
+@media (max-width: 768px) {
+  .trend-chart .chart-wrap {
+    height: 340px;
+  }
+}
+</style>

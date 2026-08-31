@@ -11,28 +11,53 @@
     />
 
     <template v-else>
+      <!-- 当前分析范围提示（与业绩分析筛选联动） -->
+      <div v-if="rangeText" class="range-bar">
+        <el-icon><Calendar /></el-icon>
+        <span>当前分析范围：<strong>{{ rangeText }}</strong></span>
+        <span class="range-hint">（跟随业绩分析页的起止期筛选）</span>
+      </div>
+
       <!-- 提示词模板管理区 -->
       <div class="prompt-box">
         <!-- 区域1：模板标签栏 -->
         <div class="template-tab-bar">
-          <div class="template-tabs">
+          <div class="template-tabs" role="tablist" aria-label="提示词模板">
             <div
-              v-for="t in templates" :key="t.id"
+              v-for="(t, idx) in templates" :key="t.id"
               class="template-tab"
-              :class="{ active: t.id === activeTemplateId }"
+              :class="{ active: !creatingTemplate && t.id === activeTemplateId }"
+              :data-template-id="t.id"
+              role="tab"
+              :tabindex="!creatingTemplate && t.id === activeTemplateId ? 0 : -1"
+              :aria-selected="!creatingTemplate && t.id === activeTemplateId ? 'true' : 'false'"
               @click="switchTemplate(t.id)"
-              :title="t.name"
+              @dblclick.stop="startRenameTemplate(t)"
+              @keydown="onTemplateKeydown($event, idx, t.id)"
+              :title="t.name + '（双击重命名）'"
             >
-              <span class="tab-name">{{ t.name }}</span>
+              <!-- 重命名输入模式 -->
+              <el-input
+                v-if="renamingTemplateId === t.id"
+                v-model="renamingName"
+                size="small"
+                style="width: 120px;"
+                @click.stop
+                @keyup.enter="confirmRenameTemplate"
+                @keyup.escape="cancelRenameTemplate"
+                @blur="confirmRenameTemplate"
+                ref="renameInputRef"
+              />
+              <span v-else class="tab-name">{{ t.name }}</span>
               <span
-                v-if="templates.length > 1"
+                v-if="templates.length > 1 && renamingTemplateId !== t.id"
                 class="tab-delete"
                 @click.stop="handleDeleteTemplate(t.id)"
                 title="删除模板"
               >&times;</span>
             </div>
             <!-- 新建模板按钮 -->
-            <div class="template-tab template-tab-add" @click="showNewTemplateInput = true" title="新建模板">
+            <div class="template-tab template-tab-add" @click="showNewTemplateInput = true; creatingTemplate = true" title="新建模板">
               <span class="tab-add-icon">+</span>
             </div>
           </div>
@@ -42,7 +67,7 @@
         <div v-if="showNewTemplateInput" class="new-template-input-row">
           <el-input v-model="newTemplateName" placeholder="输入模板名称" size="small" style="width: 200px;" @keyup.enter="handleCreateTemplate" />
           <el-button type="success" size="small" @click="handleCreateTemplate" :loading="loadingPrompt">确认</el-button>
-          <el-button size="small" @click="showNewTemplateInput = false; newTemplateName = ''">取消</el-button>
+          <el-button size="small" @click="showNewTemplateInput = false; newTemplateName = ''; creatingTemplate = false">取消</el-button>
         </div>
 
         <!-- 区域2：提示词编辑器（始终展开） -->
@@ -94,6 +119,12 @@
         <div class="output-header">
           <span class="muted">分析结果</span>
           <div class="output-actions">
+            <el-tooltip content="开启新会话" placement="top">
+              <el-button size="small" :disabled="streaming" @click="refreshSession">
+                <el-icon><Refresh /></el-icon>
+                <span>新会话</span>
+              </el-button>
+            </el-tooltip>
             <el-button size="small" :disabled="!fullText || streaming" @click="copyMd">复制</el-button>
             <el-button size="small" :disabled="!fullText || streaming" @click="exportToPDF">导出 PDF</el-button>
           </div>
@@ -101,6 +132,28 @@
 
         <!-- 错误提示（配置缺失 / 模型调用失败 / 会话过期等） -->
         <el-alert v-if="errorMsg" type="error" :closable="false" :title="errorMsg" class="err-alert" />
+
+        <!-- Agent 执行过程面板（Code Interpreter 模式） -->
+        <div v-if="showCodePanel || agentPhase" class="agent-process-panel">
+          <div class="agent-phase-indicator">
+            <el-icon v-if="agentPhase === 'generating' || agentPhase === 'executing'" class="is-loading"><Loading /></el-icon>
+            <span class="agent-phase-text">
+              {{ agentPhase === 'generating' ? '🤖 正在生成分析代码...' :
+                 agentPhase === 'executing' ? '⚙️ 正在执行数据分析...' :
+                 agentPhase === 'interpreting' ? '📝 正在撰写分析报告...' :
+                 agentMessage || '准备中...' }}
+            </span>
+          </div>
+          <!-- 可折叠的代码展示区 -->
+          <el-collapse v-if="agentCode" v-model="codeCollapseActive">
+            <el-collapse-item title="查看生成的分析代码" name="code">
+              <pre class="agent-code-block"><code>{{ agentCode }}</code></pre>
+            </el-collapse-item>
+            <el-collapse-item v-if="execResult" title="查看执行结果" name="result">
+              <pre class="agent-result-block"><code>{{ formatExecResult }}</code></pre>
+            </el-collapse-item>
+          </el-collapse>
+        </div>
 
         <!-- 加载占位 -->
         <div v-if="streaming && !fullText" class="loading-hint">
@@ -118,7 +171,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, MagicStick } from '@element-plus/icons-vue'
+import { Loading, MagicStick, Refresh, Calendar } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import html2canvas from 'html2canvas'
 import { getDefaultPrompt, isMockMode, savePrompt, optimizePrompt, getTemplates, getTemplate, createTemplate, updateTemplate, deleteTemplate, activateTemplate } from '../api/client'
@@ -132,6 +185,12 @@ const emit = defineEmits(['session-expired'])
 
 const mockMode = isMockMode()
 
+/** 当前分析范围文案（来自业绩分析筛选） */
+const rangeText = computed(() => {
+  if (!props.startMonth && !props.endMonth) return ''
+  return `${props.startMonth || '-'} ~ ${props.endMonth || '-'}`
+})
+
 // marked 配置：GFM 表格 + 换行
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -144,13 +203,36 @@ const showPromptEditor = ref(true) // 控制提示词编辑器显示/隐藏
 const optimizingPrompt = ref(false) // 提示词优化中
 let abortController = null // 用于"停止"按钮中断请求
 
+// ---- Code Interpreter Agent 状态 ----
+const agentCode = ref('') // 生成的 Python 代码
+const agentPhase = ref('') // 当前阶段：'' | 'generating' | 'executing' | 'interpreting'
+const execResult = ref('') // 代码执行结果 JSON
+const agentMessage = ref('') // Agent 执行状态消息
+const showCodePanel = ref(false) // 是否展示 Agent 执行过程面板
+const codeCollapseActive = ref([]) // 折叠面板激活项
+
+// 格式化执行结果 JSON
+const formatExecResult = computed(() => {
+  if (!execResult.value) return ''
+  try {
+    const obj = JSON.parse(execResult.value)
+    return JSON.stringify(obj, null, 2)
+  } catch {
+    return execResult.value
+  }
+})
+
 // ---- 多模板管理状态 ----
 const templates = ref([]) // 模板列表 [{id, name, active}]
 const activeTemplateId = ref('') // 当前激活的模板 ID
 const editingTemplateId = ref('') // 正在编辑的模板 ID
 const newTemplateName = ref('') // 新建模板名称
 const showNewTemplateInput = ref(false) // 显示新建模板输入框
+const creatingTemplate = ref(false) // 新建模板模式：期间取消所有模板选中高亮
 const loadingTemplates = ref(false) // 模板列表加载中
+const renamingTemplateId = ref('') // 正在重命名的模板 ID
+const renamingName = ref('') // 重命名输入内容
+const renameInputRef = ref(null) // 重命名输入框引用
 
 // 加载模板列表
 async function loadTemplates() {
@@ -174,6 +256,8 @@ async function loadTemplates() {
 async function loadActiveTemplate() {
   if (!activeTemplateId.value) return
   loadingPrompt.value = true
+  // 重置优化状态，确保按钮状态跟随当前模板正确联动
+  optimizingPrompt.value = false
   try {
     const t = await getTemplate(activeTemplateId.value)
     prompt.value = t.content || ''
@@ -246,6 +330,7 @@ async function handleSavePrompt() {
 /** 切换到指定模板 */
 async function switchTemplate(templateId) {
   if (templateId === activeTemplateId.value) return
+  creatingTemplate.value = false // 点击其他模板时退出新建模式
   try {
     await activateTemplate(templateId)
     activeTemplateId.value = templateId
@@ -253,6 +338,34 @@ async function switchTemplate(templateId) {
     await loadActiveTemplate()
   } catch (err) {
     ElMessage.error('切换模板失败：' + (err.message || '未知错误'))
+  }
+}
+
+/** 键盘方向键在模板标签间移动焦点（跟随切换，交互流畅） */
+function moveTemplateFocus(idx, step) {
+  const next = (idx + step + templates.value.length) % templates.value.length
+  const nextId = templates.value[next]?.id
+  if (!nextId) return
+  switchTemplate(nextId)
+  const el = document.querySelector(`.template-tab[data-template-id="${nextId}"]`)
+  el?.focus()
+}
+
+/**
+ * 模板标签统一键盘处理：Enter/Space 激活、方向键移动焦点。
+ * 重命名输入框处于激活状态时不响应（避免方向键/回车干扰输入）。
+ */
+function onTemplateKeydown(e, idx, id) {
+  if (renamingTemplateId.value) return
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    switchTemplate(id)
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    moveTemplateFocus(idx, 1)
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    moveTemplateFocus(idx, -1)
   }
 }
 
@@ -264,17 +377,56 @@ async function handleCreateTemplate() {
   }
   loadingPrompt.value = true
   try {
-    const t = await createTemplate(newTemplateName.value.trim(), prompt.value)
+    const t = await createTemplate(newTemplateName.value.trim(), '')
     templates.value.push({ id: t.id, name: t.name, active: false })
     newTemplateName.value = ''
     showNewTemplateInput.value = false
+    creatingTemplate.value = false
     ElMessage.success('模板已创建')
-    await loadTemplates()
+    // 创建成功后自动切换到新模板
+    await switchTemplate(t.id)
   } catch (err) {
     ElMessage.error('创建模板失败：' + (err.message || '未知错误'))
   } finally {
     loadingPrompt.value = false
   }
+}
+
+/** 开始重命名模板 */
+function startRenameTemplate(t) {
+  renamingTemplateId.value = t.id
+  renamingName.value = t.name
+  nextTick(() => {
+    // 自动聚焦输入框并全选文字
+    const input = renameInputRef.value
+    if (input && input.focus) input.focus()
+  })
+}
+
+/** 确认重命名 */
+async function confirmRenameTemplate() {
+  const id = renamingTemplateId.value
+  const newName = renamingName.value.trim()
+  renamingTemplateId.value = ''
+  if (!newName) {
+    ElMessage.warning('模板名称不能为空')
+    return
+  }
+  const t = templates.value.find(t => t.id === id)
+  if (!t || t.name === newName) return // 名称未变化则跳过
+  try {
+    await updateTemplate(id, newName, t.content || '')
+    t.name = newName
+    ElMessage.success('模板已重命名')
+  } catch (err) {
+    ElMessage.error('重命名失败：' + (err.message || '未知错误'))
+  }
+}
+
+/** 取消重命名 */
+function cancelRenameTemplate() {
+  renamingTemplateId.value = ''
+  renamingName.value = ''
 }
 
 /** 删除模板 */
@@ -323,6 +475,25 @@ const renderedHtml = computed(() => {
   return streaming.value ? html + '<span class="typing-cursor">▍</span>' : html
 })
 
+/** 流式输出时自动滚动到底部（跟随最近的可滚动祖先容器） */
+function scrollOutputToBottom() {
+  nextTick(() => {
+    const el = document.querySelector('.ai-anomaly-panel .output-card')
+    if (!el) return
+    let node = el
+    while (node) {
+      if (node.scrollHeight > node.clientHeight && node !== document.body) {
+        node.scrollTop = node.scrollHeight
+        break
+      }
+      node = node.parentElement
+    }
+  })
+}
+watch(fullText, () => {
+  if (streaming.value) scrollOutputToBottom()
+})
+
 /** 构建流式分析请求体：包含会话ID、提示词和可选的时间范围 */
 function buildRequestBody() {
   const body = { session_id: props.sessionId, prompt: prompt.value }
@@ -343,6 +514,12 @@ async function start() {
   fullText.value = ''
   streaming.value = true
   abortController = new AbortController()
+  // 重置 Agent 状态
+  agentCode.value = ''
+  agentPhase.value = ''
+  execResult.value = ''
+  agentMessage.value = ''
+  showCodePanel.value = false
 
   try {
     const resp = await fetch('/api/anomaly/stream', {
@@ -397,6 +574,21 @@ function handleSseEvent(part) {
     }
     if (payload.type === 'delta') {
       fullText.value += payload.content // 增量累加
+    } else if (payload.type === 'code') {
+      // Agent 阶段一：收到生成的代码
+      agentCode.value = payload.content
+      agentPhase.value = 'executing'
+      showCodePanel.value = true
+    } else if (payload.type === 'executing') {
+      // Agent 执行状态更新
+      agentMessage.value = payload.message
+      if (!agentPhase.value || agentPhase.value === '') {
+        agentPhase.value = 'generating'
+      }
+    } else if (payload.type === 'result') {
+      // Agent 阶段一：收到代码执行结果
+      execResult.value = payload.content
+      agentPhase.value = 'interpreting'
     } else if (payload.type === 'warning') {
       ElMessage.warning(payload.message)
     } else if (payload.type === 'error') {
@@ -405,6 +597,24 @@ function handleSseEvent(part) {
       // 流正常结束（循环退出后 finally 会收尾）
     }
   }
+}
+
+/** 开启新会话：清空分析结果并重置状态 */
+function refreshSession() {
+  if (streaming.value) return
+  // 中断可能存在的流式请求
+  if (abortController) abortController.abort()
+  fullText.value = ''
+  errorMsg.value = ''
+  streaming.value = false
+  abortController = null
+  // 重置 Agent 状态
+  agentCode.value = ''
+  agentPhase.value = ''
+  execResult.value = ''
+  agentMessage.value = ''
+  showCodePanel.value = false
+  ElMessage.success('已开始新会话')
 }
 
 /** 停止流式输出 */
@@ -429,6 +639,8 @@ async function copyMd() {
   }
 }
 
+import { exportMarkdownToPDF } from '../utils/pdf.js'
+
 /** 通用 Blob 下载 */
 function downloadBlob(content, filename, mime) {
   const blob = new Blob([content], { type: mime })
@@ -440,54 +652,13 @@ function downloadBlob(content, filename, mime) {
   URL.revokeObjectURL(url)
 }
 
-/** 下载原始 Markdown */
-function downloadMd() {
-  downloadBlob(fullText.value, '异常分析结果.md', 'text/markdown;charset=utf-8')
-}
-
-/** 导出分析结果为 PDF（通过打印对话框另存为） */
-function exportToPDF() {
-  const mdBody = document.querySelector('.md-body')
-  if (!mdBody || !mdBody.innerHTML.trim()) {
+/** 导出分析结果为 PDF（jsPDF 生成真正 PDF 表格，文字可复制） */
+async function exportToPDF() {
+  if (!fullText.value || !fullText.value.trim()) {
     ElMessage.warning('暂无分析结果可导出')
     return
   }
-  const printWindow = window.open('', '_blank')
-  if (!printWindow) {
-    ElMessage.error('请允许弹出窗口以导出 PDF')
-    return
-  }
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>AI 数据分析报告</title>
-<style>
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.6;color:#202124;padding:20px;max-width:900px;margin:0 auto}
-h1,h2,h3{color:#1a73e8}
-h1{font-size:20px;border-bottom:2px solid #1a73e8;padding-bottom:8px}
-h2{font-size:16px;margin-top:20px}
-h3{font-size:14px}
-table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
-th{background:#f8f9fa;padding:8px 10px;font-weight:600;border:1px solid #dadce0;text-align:left;color:#5f6368}
-td{padding:6px 10px;border:1px solid #dadce0}
-tr:nth-child(even){background:#fafbfc}
-strong{color:#202124}
-em{color:#5f6368}
-hr{border:none;border-top:1px solid #e8eaed;margin:16px 0}
-p{margin:8px 0}
-ul,ol{margin:8px 0;padding-left:24px}
-li{margin:4px 0}
-code{background:#f1f3f4;padding:2px 6px;border-radius:3px;font-size:13px}
-blockquote{border-left:3px solid #1a73e8;padding-left:12px;color:#5f6368;margin:12px 0}
-@media print{body{padding:10px}table{page-break-inside:avoid}}
-</style></head><body>
-<h1>AI 数据分析报告</h1>
-<p style="color:#9aa0a6;font-size:12px">生成时间：${new Date().toLocaleString('zh-CN')}</p>
-<hr>
-${mdBody.innerHTML}
-</body></html>`
-  printWindow.document.write(html)
-  printWindow.document.close()
-  setTimeout(() => { printWindow.print(); printWindow.close() }, 500)
-  ElMessage.success('PDF 导出已启动，请在打印对话框中选择"另存为 PDF"')
+  await exportMarkdownToPDF(fullText.value, 'AI 数据分析报告')
 }
 
 
@@ -627,6 +798,27 @@ onBeforeUnmount(() => {
   font-size: var(--fs-base);
 }
 
+/* 分析范围提示条 */
+.range-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--fs-sm);
+  color: var(--color-text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: var(--spacing-md);
+}
+.range-bar .el-icon {
+  color: var(--color-primary);
+}
+.range-bar .range-hint {
+  color: var(--color-text-muted);
+}
+
 /* ---- 模板标签栏 ---- */
 .template-tab-bar {
   margin-bottom: 12px;
@@ -645,8 +837,8 @@ onBeforeUnmount(() => {
   height: 32px;
   border-radius: 4px;
   border: 1px solid #e0e0e0;
-  background: #f5f5f5;
-  color: #5f6368;
+  background: #f5f5f7;
+  color: #6e6e73;
   cursor: pointer;
   font-size: 13px;
   transition: all 0.2s;
@@ -654,22 +846,38 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 .template-tab:hover {
-  background: #e8eaed;
+  background: #e8e8ed;
+}
+.template-tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 .template-tab.active {
-  background: #1a73e8;
+  background: #0066cc;
   color: #fff;
-  border-color: #1a73e8;
+  border-color: #0066cc;
   font-weight: 600;
 }
 .template-tab.active:hover {
-  background: #1565c0;
+  background: #0057b0;
 }
 .template-tab .tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 120px;
+}
+/* 重命名输入框在标签内的样式 */
+.template-tab :deep(.el-input__wrapper) {
+  padding: 0 6px;
+  box-shadow: none;
+  border: 1px solid #0066cc;
+  border-radius: 3px;
+  background: #fff;
+}
+.template-tab.active :deep(.el-input__wrapper) {
+  border-color: #fff;
+  background: rgba(255,255,255,0.9);
 }
 .template-tab .tab-delete {
   display: inline-flex;
@@ -692,7 +900,7 @@ onBeforeUnmount(() => {
 .template-tab .tab-delete:hover {
   opacity: 1 !important;
   background: rgba(217, 48, 49, 0.15);
-  color: #d93025;
+  color: #ff3b30;
 }
 .template-tab.active .tab-delete:hover {
   background: rgba(255,255,255,0.2);
@@ -719,7 +927,7 @@ onBeforeUnmount(() => {
 .editor-title {
   font-weight: 600;
   font-size: 14px;
-  color: #5f6368;
+  color: #6e6e73;
 }
 .editor-actions {
   display: flex;
@@ -728,18 +936,18 @@ onBeforeUnmount(() => {
 .editor-hint {
   margin-top: 4px;
   font-size: 12px;
-  color: #9aa0a6;
+  color: #86868b;
 }
 
 /* ---- 操作按钮区域 ---- */
 .template-tab-add {
   border-style: dashed;
   background: transparent;
-  color: #9aa0a6;
+  color: #86868b;
 }
 .template-tab-add:hover {
-  border-color: #1a73e8;
-  color: #1a73e8;
+  border-color: #0066cc;
+  color: #0066cc;
   background: rgba(26, 115, 232, 0.04);
 }
 .template-tab-add .tab-add-icon {
@@ -768,15 +976,15 @@ onBeforeUnmount(() => {
   min-height: 200px;
   font-size: 14px;
   line-height: 1.8;
-  color: #202124;
+  color: #1d1d1f;
   word-break: break-word;
 }
 .md-body h1, .md-body h2, .md-body h3, .md-body h4 {
-  color: #1a73e8;
+  color: #0066cc;
   margin: 16px 0 8px;
   font-weight: 600;
 }
-.md-body h1 { font-size: 20px; border-bottom: 2px solid #e8eaed; padding-bottom: 6px; }
+.md-body h1 { font-size: 20px; border-bottom: 2px solid #e8e8ed; padding-bottom: 6px; }
 .md-body h2 { font-size: 18px; }
 .md-body h3 { font-size: 16px; }
 .md-body p { margin: 8px 0; }
@@ -790,60 +998,100 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 .md-body th {
-  background: #f8f9fa;
+  background: #f5f5f7;
   padding: 8px 12px;
   font-weight: 600;
-  border: 1px solid #dadce0;
+  border: 1px solid #d2d2d7;
   text-align: left;
-  color: #5f6368;
+  color: #6e6e73;
   white-space: nowrap;
 }
 .md-body td {
   padding: 6px 12px;
-  border: 1px solid #e8eaed;
+  border: 1px solid #e8e8ed;
 }
 .md-body tr:nth-child(even) {
-  background: #fafbfc;
+  background: #fafafc;
 }
 .md-body tr:hover {
-  background: #f0f4ff;
+  background: #f0f6ff;
 }
 .md-body code {
-  background: #f1f3f4;
+  background: #f5f5f7;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
   font-family: 'Consolas', 'Monaco', monospace;
 }
 .md-body pre {
-  background: #f6f8fa;
+  background: #f5f5f7;
   padding: 12px 16px;
   border-radius: 8px;
   overflow-x: auto;
   margin: 8px 0;
-  border: 1px solid #e8eaed;
+  border: 1px solid #e8e8ed;
 }
 .md-body pre code {
   background: none;
   padding: 0;
 }
 .md-body blockquote {
-  border-left: 3px solid #1a73e8;
+  border-left: 3px solid #0066cc;
   padding: 8px 12px;
-  color: #5f6368;
+  color: #6e6e73;
   margin: 8px 0;
-  background: #f8f9fa;
+  background: #f5f5f7;
   border-radius: 0 4px 4px 0;
 }
-.md-body strong { color: #202124; font-weight: 600; }
-.md-body em { color: #5f6368; }
-.md-body hr { border: none; border-top: 1px solid #e8eaed; margin: 16px 0; }
-.md-body a { color: #1a73e8; text-decoration: none; }
+.md-body strong { color: #1d1d1f; font-weight: 600; }
+.md-body em { color: #6e6e73; }
+.md-body hr { border: none; border-top: 1px solid #e8e8ed; margin: 16px 0; }
+.md-body a { color: #0066cc; text-decoration: none; }
 .md-body a:hover { text-decoration: underline; }
 .ai-anomaly-panel .action-bar {
   display: flex;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
   flex-wrap: wrap;
+}
+
+/* ---- Agent 执行过程面板 ---- */
+.agent-process-panel {
+  background: #f5f5f7;
+  border: 1px solid #e8e8ed;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.agent-phase-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.agent-phase-text {
+  font-size: 14px;
+  color: #6e6e73;
+  font-weight: 500;
+}
+.agent-code-block,
+.agent-result-block {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+}
+.agent-code-block code,
+.agent-result-block code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
 }
 </style>
