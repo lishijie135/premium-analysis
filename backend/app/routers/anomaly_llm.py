@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-"""AI 异常分析路由：默认提示词查询 + 大模型 SSE 流式分析。
+"""AI 异常分析路由：默认提示词查询 + Code Interpreter Agent SSE 流式分析。
 
 - GET  /anomaly/default-prompt  返回默认提示词
-- POST /anomaly/stream          SSE 流式输出大模型分析结果
+- POST /anomaly/stream          SSE 流式输出大模型分析结果（两阶段 Agent 模式）
 
 SSE 事件格式（每行一个 JSON）：
-  data: {"type":"warning","message":"..."}   警告（可选，首事件）
-  data: {"type":"delta","content":"..."}     模型输出增量文本
-  data: {"type":"done"}                      正常结束
-  data: {"type":"error","message":"..."}     错误（配置缺失/模型调用失败等）
+  data: {"type":"warning","message":"..."}      警告（可选，首事件）
+  data: {"type":"executing","message":"..."}    Agent 执行状态
+  data: {"type":"code","content":"..."}         生成的 Python 代码
+  data: {"type":"result","content":"..."}       代码执行结果（JSON）
+  data: {"type":"delta","content":"..."}        模型输出增量文本（阶段二）
+  data: {"type":"done"}                          正常结束
+  data: {"type":"error","message":"..."}         错误
 
 模型配置读取 backend/.env（LLM_BASE_URL / LLM_API_KEY / LLM_MODEL），
 兼容 .env 不存在或字段缺失：此时 SSE 返回明确的 error 事件，不抛 500。
@@ -26,8 +29,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .. import parser
-from ..prompts import DEFAULT_PROMPT
+from ..prompts import DEFAULT_PROMPT, CODE_GEN_SYSTEM_PROMPT, INTERPRET_SYSTEM_PROMPT
 from ..session_store import store, prompt_store
+from ..code_executor import execute_analysis_code
 
 logger = logging.getLogger("anomaly_llm")
 
@@ -331,8 +335,116 @@ def _build_quarterly_csv(data: pd.DataFrame, extra_months: Optional[set] = None)
     return csv_text
 
 
+# ---------------------------------------------------------------------------
+# Code Interpreter Agent 辅助函数
+# ---------------------------------------------------------------------------
+
+def _build_schema_info(df: pd.DataFrame) -> str:
+    """从 DataFrame 构建 Schema 描述（列名 + 数据类型 + 示例值）。"""
+    lines = []
+    for col in df.columns:
+        dtype = str(df[col].dtype)
+        # 取第一个非空值作为示例
+        non_null = df[col].dropna()
+        sample_val = str(non_null.iloc[0]) if len(non_null) > 0 else "N/A"
+        lines.append(f"  - {col} ({dtype})，示例: {sample_val}")
+    return "\n".join(lines)
 
 
+def _build_sample_data(df: pd.DataFrame, n: int = 5) -> str:
+    """返回前 n 行样本数据的 CSV 文本（含表头）。"""
+    sample = df.head(n)
+    return sample.to_csv(index=False)
+
+
+def _extract_code_from_response(text: str) -> str:
+    """从 LLM 响应中提取 ```python ... ``` 代码块。"""
+    # 匹配 ```python ... ``` 或 ``` ... ```
+    pattern = r"```(?:python)?\s*\n(.*?)```"
+    match = re.search(pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # 兜底：如果 LLM 没有用代码块包裹，直接返回原文（可能已经是纯代码）
+    return text.strip()
+
+
+async def _call_llm_non_streaming(cfg: Dict, messages: List[Dict]) -> str:
+    """非流式 LLM 调用（用于 Agent 阶段一：代码生成）。"""
+    payload = {
+        "model": cfg["model"],
+        "messages": messages,
+        "temperature": 0.2,
+        "max_tokens": cfg.get("max_tokens", 8192),
+    }
+    if cfg.get("enable_thinking"):
+        payload["enable_thinking"] = True
+
+    async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SECONDS) as client:
+        resp = await client.post(
+            f"{cfg['base_url']}/chat/completions",
+            headers={"Authorization": f"Bearer {cfg['api_key']}", "Content-Type": "application/json"},
+            json=payload,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+
+def _prepare_cleaned_df(
+    df: pd.DataFrame,
+    months: List[Tuple[int, int]],
+    session_id: Optional[str] = None,
+) -> Tuple[pd.DataFrame, Dict[str, float]]:
+    """数据清洗 + 月份过滤，返回 (filtered_df, precomputed_stats)。
+
+    复用 parser.extract_records 的清洗逻辑（与 _build_csv 一致）。
+    """
+    columns = [str(c) for c in df.columns if str(c) != "__orig_idx__"]
+
+    # 优先使用用户确认的 mapping
+    mapping = None
+    if session_id:
+        mapping = store.get_mapping(session_id)
+        if mapping is not None:
+            logger.info("Agent 模式使用用户确认的 mapping: session=%s", session_id)
+    if mapping is None:
+        mapping = parser.auto_map_columns(columns)
+        logger.info("Agent 模式使用自动识别 mapping: %s", mapping)
+
+    if any(v is None for v in mapping.values()):
+        raise ValueError("无法自动识别数据列（需包含 客户代码/签单时间/保费量/出单量）")
+
+    parsed = parser.extract_records(df, mapping)
+    cleaned = parsed["cleaned"]
+    if len(cleaned) == 0:
+        raise ValueError("会话数据中没有有效明细行，无法进行分析")
+
+    # 月份过滤
+    required_set = set(months)
+    filtered = cleaned[
+        cleaned.apply(lambda r: (r.year, r.month) in required_set, axis=1)
+    ].copy()
+    if len(filtered) == 0:
+        raise ValueError(
+            "会话数据中没有分析所需月份（%s）的数据"
+            % ", ".join("%04d-%02d" % (y, m) for y, m in months)
+        )
+
+    filtered = filtered.sort_values(["customer", "year", "month"])
+
+    # 预计算校验基准
+    precomputed_stats = {
+        "total_premium": float(filtered["premium"].sum()),
+        "total_policies": int(filtered["policies"].sum()),
+        "total_rows": len(filtered),
+    }
+    logger.info(
+        "Agent 数据准备完成: %d 行, 总保费=%.2f, 总单量=%d",
+        precomputed_stats["total_rows"],
+        precomputed_stats["total_premium"],
+        precomputed_stats["total_policies"],
+    )
+    return filtered, precomputed_stats
 
 
 @router.get("/anomaly/default-prompt")
@@ -481,38 +593,130 @@ async def anomaly_stream(req: StreamRequest):
             yield _sse({"type": "error", "message": CONFIG_MISSING_MSG})
             return
 
-        # 2. 构建数据 CSV（客户x月份聚合）
-        # 根据前端传入的起止月份动态筛选，未传时回退到 REQUIRED_MONTHS
+        # 2. 数据准备：清洗 + 月份过滤，获取 cleaned DataFrame + 预计算基准
         months = _resolve_months(req.start_month, req.end_month)
         try:
-            csv_text, warning = _build_csv(df, months=months, session_id=req.session_id)
+            filtered_df, precomputed_stats = _prepare_cleaned_df(
+                df, months, session_id=req.session_id,
+            )
         except ValueError as exc:
-            logger.error("构建分析数据失败: %s", exc)
+            logger.error("数据准备失败: %s", exc)
             yield _sse({"type": "error", "message": str(exc)})
             return
 
-        # 数据警告作为首个事件下发（降级时附带说明信息）
-        if warning:
-            yield _sse({"type": "warning", "message": warning})
+        # 构建 Schema 和样本数据（替代全量 CSV）
+        schema_info = _build_schema_info(filtered_df)
+        sample_data = _build_sample_data(filtered_df, n=5)
+        row_count = len(filtered_df)
 
-        # 3. 组装消息：system=用户提示词（分析规则），user=数据
-        messages = [
-            {"role": "system", "content": req.prompt or DEFAULT_PROMPT},
-            {
-                "role": "user",
-                "content": "以下是数据：\n```csv\n%s\n```\n\n请根据规则输出分析结果" % csv_text,
-            },
-        ]
-        logger.info(
-            "开始 LLM 流式分析 (OpenAI Compatible): session=%s model=%s csv_chars=%d max_tokens=%d",
-            req.session_id, cfg["model"], len(csv_text), cfg["max_tokens"],
+        # 填充代码生成 System Prompt
+        code_gen_system = CODE_GEN_SYSTEM_PROMPT.format(
+            schema=schema_info,
+            row_count=row_count,
+            sample=sample_data,
         )
 
-        # 4. OpenAI 兼容接口流式调用
+        # ------------------------------------------------------------------
+        # 阶段一-A：代码生成（非流式 LLM 调用）
+        # ------------------------------------------------------------------
+        yield _sse({"type": "executing", "message": "正在生成分析代码..."})
+
+        code_messages = [
+            {"role": "system", "content": code_gen_system},
+            {"role": "user", "content": "分析需求：\n" + (req.prompt or DEFAULT_PROMPT)},
+        ]
+
+        max_retries = 2
+        final_code = ""
+        final_exec_result = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                llm_response = await _call_llm_non_streaming(cfg, code_messages)
+                extracted_code = _extract_code_from_response(llm_response)
+                final_code = extracted_code
+
+                yield _sse({"type": "code", "content": extracted_code})
+                logger.info(
+                    "Agent 代码生成完成: session=%s, attempt=%d, code_len=%d",
+                    req.session_id, attempt + 1, len(extracted_code),
+                )
+            except Exception as exc:
+                logger.exception("代码生成阶段 LLM 调用失败: %s", exc)
+                yield _sse({"type": "error", "message": f"代码生成失败: {exc}"})
+                return
+
+            # ------------------------------------------------------------------
+            # 本地执行代码
+            # ------------------------------------------------------------------
+            yield _sse({"type": "executing", "message": "正在执行数据分析..."})
+
+            exec_result = execute_analysis_code(
+                extracted_code, filtered_df, precomputed_stats,
+            )
+            final_exec_result = exec_result
+
+            yield _sse({"type": "result", "content": json.dumps(exec_result, ensure_ascii=False)})
+
+            if exec_result["success"]:
+                logger.info("代码执行成功: session=%s", req.session_id)
+                break
+            else:
+                # 执行失败，准备重试
+                error_msg = exec_result.get("error", "未知错误")
+                logger.warning(
+                    "代码执行失败 (attempt %d/%d): %s",
+                    attempt + 1, max_retries + 1, error_msg,
+                )
+                if attempt < max_retries:
+                    yield _sse({"type": "executing", "message": f"代码执行出错，正在修正重试 ({attempt + 1}/{max_retries})..."})
+                    # 将错误信息回传给 LLM，让其修正代码
+                    code_messages.append({"role": "assistant", "content": llm_response})
+                    code_messages.append({
+                        "role": "user",
+                        "content": f"代码执行出错：{error_msg}\n请修正代码并重新输出完整的 Python 代码。",
+                    })
+                # 最后一次重试也失败，继续进入阶段二（让 LLM 在报告中说明）
+
+        # ------------------------------------------------------------------
+        # 阶段一-B：结果解读（流式 LLM 调用）
+        # ------------------------------------------------------------------
+        # 构建阶段二的用户消息
+        if final_exec_result and final_exec_result["success"]:
+            result_json = json.dumps(final_exec_result["result"], ensure_ascii=False, indent=2)
+            # 如果有校验告警，附加提醒
+            validation_note = ""
+            if final_exec_result.get("validation", {}).get("warnings"):
+                validation_note = "\n\n⚠️ 数据校验告警：\n" + "\n".join(
+                    f"- {w}" for w in final_exec_result["validation"]["warnings"]
+                )
+            interpret_user_msg = (
+                f"以下是数据分析的精确计算结果：\n```json\n{result_json}\n```"
+                f"{validation_note}\n\n请根据上述结果撰写完整分析报告。"
+            )
+        else:
+            # 代码执行最终失败，将错误信息传给阶段二
+            error_info = final_exec_result.get("error", "代码执行失败") if final_exec_result else "代码执行异常"
+            interpret_user_msg = (
+                f"数据分析代码执行失败，错误信息：{error_info}\n\n"
+                f"请如实告知用户代码执行遇到了问题，并说明可能的原因。"
+            )
+
+        interpret_messages = [
+            {"role": "system", "content": req.prompt or DEFAULT_PROMPT},
+            {"role": "user", "content": interpret_user_msg},
+        ]
+
+        logger.info(
+            "开始阶段二结果解读: session=%s, model=%s",
+            req.session_id, cfg["model"],
+        )
+
+        # 流式调用 LLM
         try:
             payload = {
                 "model": cfg["model"],
-                "messages": messages,
+                "messages": interpret_messages,
                 "stream": True,
                 "temperature": 0.2,
                 "max_tokens": cfg["max_tokens"],
@@ -540,9 +744,9 @@ async def anomaly_stream(req: StreamRequest):
                         except (json.JSONDecodeError, KeyError, IndexError):
                             continue
             yield _sse({"type": "done"})
-            logger.info("LLM 流式分析完成: session=%s", req.session_id)
+            logger.info("Agent 两阶段分析完成: session=%s", req.session_id)
         except Exception:
-            logger.exception("LLM 流式分析发生未预期异常: session=%s", req.session_id)
+            logger.exception("阶段二流式分析异常: session=%s", req.session_id)
             yield _sse({"type": "error", "message": "分析过程发生异常，请稍后重试"})
 
     return StreamingResponse(

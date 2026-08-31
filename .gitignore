@@ -1,6 +1,10 @@
 # 用户保存的提示词（运行时生成，不纳入版本控制）
 user_prompt.json
 
+# Node 依赖（体积大、可重新安装，绝不提交）
+frontend/node_modules/
+node_modules/
+
 # Python 缓存文件
 __pycache__/
 *.py[cod]
@@ -11,11 +15,16 @@ __pycache__/
 .venv/
 venv/
 
-# Logs
+# Logs & 运行时产物
 backend/logs/
+backend/_uvicorn.log
+backend/_uvicorn.err
+*.log
+*.err
 
 # Build output
 frontend/dist/
+dist/
 
 # IDE
 .idea/
@@ -27,5 +36,13 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
-# Environment variables
+# 本地 agent 记忆（不属于项目代码）
+.workbuddy/
+
+# 临时提交说明文件
+_commit_msg.txt
+
+# Environment variables（含密钥，绝不提交）
 .env
+.env.local
+.env.*.local

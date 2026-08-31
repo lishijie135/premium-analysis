@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""AI 对话问答路由：基于上传数据的多轮对话。
+"""AI 对话问答路由：基于上传数据的多轮对话（Code Interpreter Agent 模式）。
 
-- POST /chat/stream   SSE 流式对话
+- POST /chat/stream   SSE 流式对话（两阶段：代码生成 → 结果解读）
 - POST /chat/clear    清空对话历史
 
-通过 import 复用 anomaly_llm.py 中的函数，不修改任何现有文件。
+通过 import 复用 anomaly_llm.py 中的辅助函数。
 """
 import json
 import logging
@@ -16,11 +16,17 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ..session_store import store
+from ..prompts import CODE_GEN_SYSTEM_PROMPT
+from ..code_executor import execute_analysis_code
 from .anomaly_llm import (
-    _build_csv,
     _get_llm_config,
     _sse,
     _resolve_months,
+    _build_schema_info,
+    _build_sample_data,
+    _extract_code_from_response,
+    _call_llm_non_streaming,
+    _prepare_cleaned_df,
     LLM_TIMEOUT_SECONDS,
     CONFIG_MISSING_MSG,
 )
@@ -42,13 +48,12 @@ class ChatClearRequest(BaseModel):
     session_id: str
 
 
-CHAT_SYSTEM_PROMPT = """你是一个专业的保险数据分析助手。用户已上传了保费与保单数据，你需要基于这些数据回答用户的问题。
+CHAT_SYSTEM_PROMPT = """你是一个专业的保险数据分析助手。用户已上传了保费与保单数据，系统已通过代码精确计算并返回了结果。
 
-## 数据处理铁律
-1. 忠实原文：仅使用用户提供的数据回答，绝不编造或推测数据。
-2. 数值引用：数据末尾的"--- 汇总 ---"行中的 TOTAL 是系统预计算的精确汇总值，引用总数时必须直接使用该行的数值，禁止自行重新累加。
-3. 分组计算：对于分组汇总（如按季度、按客户），可以自行计算，但必须展示参与计算的原始数值。
-4. 数据缺失：若数据不足以回答问题，明确告知用户"数据不足，无法回答"。
+## 核心原则
+1. 忠实结果：所有数据引用必须基于代码执行结果，禁止编造或修改任何数值。
+2. 数据缺失：若代码执行结果不足以回答问题，明确告知用户"数据不足，无法回答"。
+3. 如果结果中包含校验信息（validation），可注明数据已通过交叉验证。
 
 ## 回答风格
 - 简洁专业，直接给出结论
@@ -59,7 +64,7 @@ CHAT_SYSTEM_PROMPT = """你是一个专业的保险数据分析助手。用户�
 
 @router.post("/chat/stream")
 async def chat_stream(req: ChatStreamRequest):
-    """SSE 流式对话。"""
+    """SSE 流式对话（Code Interpreter Agent 两阶段模式）。"""
     df = store.get(req.session_id)
     if df is None:
         return StreamingResponse(
@@ -73,34 +78,141 @@ async def chat_stream(req: ChatStreamRequest):
             iter([_sse({"type": "error", "message": CONFIG_MISSING_MSG})]),
             media_type="text/event-stream",
         )
-    logger.info("Chat LLM 调用: model=%s, base_url=%s", cfg["model"], cfg["base_url"])
+    logger.info("Chat Agent 调用: model=%s, base_url=%s", cfg["model"], cfg["base_url"])
 
+    # 数据准备：清洗 + 月份过滤
     months = _resolve_months(req.start_month, req.end_month)
-    csv_text, _ = _build_csv(df, months, session_id=req.session_id)
+    try:
+        filtered_df, precomputed_stats = _prepare_cleaned_df(
+            df, months, session_id=req.session_id,
+        )
+    except ValueError as exc:
+        logger.error("Chat 数据准备失败: %s", exc)
+        return StreamingResponse(
+            iter([_sse({"type": "error", "message": str(exc)})]),
+            media_type="text/event-stream",
+        )
 
+    # 构建 Schema 和样本数据
+    schema_info = _build_schema_info(filtered_df)
+    sample_data = _build_sample_data(filtered_df, n=5)
+    row_count = len(filtered_df)
+
+    code_gen_system = CODE_GEN_SYSTEM_PROMPT.format(
+        schema=schema_info,
+        row_count=row_count,
+        sample=sample_data,
+    )
+
+    # 获取对话历史
     history = store.get_chat_history(req.session_id)
-    is_first_turn = len(history) == 0
 
-    messages = [{"role": "system", "content": CHAT_SYSTEM_PROMPT}]
-
-    if is_first_turn:
-        messages.append({
-            "role": "user",
-            "content": "以下是数据：\n```csv\n" + csv_text + "\n```\n\n用户问题：" + req.message,
-        })
-    else:
-        for msg in history:
-            messages.append({"role": msg["role"], "content": msg["content"]})
-        messages.append({"role": "user", "content": req.message})
-
+    # 记录用户消息
     store.put_chat_message(req.session_id, "user", req.message)
 
     async def event_generator():
         full_reply = ""
+
+        # ------------------------------------------------------------------
+        # 阶段一-A：代码生成（非流式 LLM 调用）
+        # ------------------------------------------------------------------
+        yield _sse({"type": "executing", "message": "正在生成分析代码..."})
+
+        # 构建代码生成消息
+        code_user_content = req.message
+        if history:
+            # 多轮对话时，附带上一轮的上下文
+            last_history = history[-1] if history else None
+            if last_history and last_history["role"] == "assistant":
+                code_user_content = f"用户问题：{req.message}\n\n（这是多轮对话的后续问题，请基于数据结构生成合适的分析代码）"
+
+        code_messages = [
+            {"role": "system", "content": code_gen_system},
+            {"role": "user", "content": code_user_content},
+        ]
+
+        max_retries = 2
+        final_code = ""
+        final_exec_result = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                llm_response = await _call_llm_non_streaming(cfg, code_messages)
+                extracted_code = _extract_code_from_response(llm_response)
+                final_code = extracted_code
+
+                yield _sse({"type": "code", "content": extracted_code})
+                logger.info(
+                    "Chat Agent 代码生成完成: attempt=%d, code_len=%d",
+                    attempt + 1, len(extracted_code),
+                )
+            except Exception as exc:
+                logger.exception("Chat 代码生成阶段 LLM 调用失败: %s", exc)
+                yield _sse({"type": "error", "message": f"代码生成失败: {exc}"})
+                return
+
+            # ------------------------------------------------------------------
+            # 本地执行代码
+            # ------------------------------------------------------------------
+            yield _sse({"type": "executing", "message": "正在计算..."})
+
+            exec_result = execute_analysis_code(
+                extracted_code, filtered_df, precomputed_stats,
+            )
+            final_exec_result = exec_result
+
+            yield _sse({"type": "result", "content": json.dumps(exec_result, ensure_ascii=False)})
+
+            if exec_result["success"]:
+                logger.info("Chat 代码执行成功")
+                break
+            else:
+                error_msg = exec_result.get("error", "未知错误")
+                logger.warning(
+                    "Chat 代码执行失败 (attempt %d/%d): %s",
+                    attempt + 1, max_retries + 1, error_msg,
+                )
+                if attempt < max_retries:
+                    yield _sse({"type": "executing", "message": f"代码执行出错，正在修正重试 ({attempt + 1}/{max_retries})..."})
+                    code_messages.append({"role": "assistant", "content": llm_response})
+                    code_messages.append({
+                        "role": "user",
+                        "content": f"代码执行出错：{error_msg}\n请修正代码并重新输出完整的 Python 代码。",
+                    })
+
+        # ------------------------------------------------------------------
+        # 阶段一-B：结果解读（流式 LLM 调用）
+        # ------------------------------------------------------------------
+        if final_exec_result and final_exec_result["success"]:
+            result_json = json.dumps(final_exec_result["result"], ensure_ascii=False, indent=2)
+            validation_note = ""
+            if final_exec_result.get("validation", {}).get("warnings"):
+                validation_note = "\n\n⚠️ 数据校验告警：\n" + "\n".join(
+                    f"- {w}" for w in final_exec_result["validation"]["warnings"]
+                )
+            interpret_user_msg = (
+                f"用户问题：{req.message}\n\n"
+                f"以下是代码执行的精确计算结果：\n```json\n{result_json}\n```"
+                f"{validation_note}\n\n请基于上述结果回答用户的问题。"
+            )
+        else:
+            error_info = final_exec_result.get("error", "代码执行失败") if final_exec_result else "代码执行异常"
+            interpret_user_msg = (
+                f"用户问题：{req.message}\n\n"
+                f"数据分析代码执行失败，错误信息：{error_info}\n\n"
+                f"请如实告知用户代码执行遇到了问题。"
+            )
+
+        interpret_messages = [
+            {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+            {"role": "user", "content": interpret_user_msg},
+        ]
+
+        # 流式调用 LLM
         try:
             payload = {
                 "model": cfg["model"],
-                "messages": messages,
+                "messages": interpret_messages,
                 "stream": True,
                 "temperature": 0.2,
                 "max_tokens": cfg["max_tokens"],
@@ -130,10 +242,11 @@ async def chat_stream(req: ChatStreamRequest):
                             continue
 
         except Exception as e:
-            logger.exception("LLM 调用异常")
+            logger.exception("Chat 阶段二 LLM 调用异常")
             yield _sse({"type": "error", "message": "服务异常: " + str(e)})
             return
 
+        # 存储助手回复（仅存储最终解读文本）
         store.put_chat_message(req.session_id, "assistant", full_reply)
         yield _sse({"type": "done"})
 

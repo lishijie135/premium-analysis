@@ -1,17 +1,34 @@
 <template>
   <div class="dashboard-page">
-    <!-- 开始分析按钮 -->
-    <div v-if="!performanceData" class="dashboard-start-area">
-      <el-button type="primary" size="large" :loading="analyzing" @click="startAnalysis">
-        开始分析
-      </el-button>
+    <!-- 首次分析中：骨架屏占位（替代纯 spinner，减少认知负担） -->
+    <div v-if="!performanceData && analyzing" class="dashboard-skeleton" aria-label="正在加载分析结果">
+      <div class="skeleton-row">
+        <div class="skeleton-block skeleton-stat"></div>
+        <div class="skeleton-block skeleton-stat"></div>
+        <div class="skeleton-block skeleton-stat"></div>
+        <div class="skeleton-block skeleton-stat"></div>
+      </div>
+      <div class="skeleton-block skeleton-chart"></div>
+      <div class="skeleton-row">
+        <div class="skeleton-block skeleton-chart-half"></div>
+        <div class="skeleton-block skeleton-chart-half"></div>
+      </div>
+      <p class="skeleton-loading-text">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>正在分析业绩数据…</span>
+      </p>
     </div>
 
+    <!-- 未出结果且非分析中：手动开始（失败重试场景） -->
+    <div v-else-if="!performanceData" class="dashboard-start-area">
+      <el-button type="primary" size="large" @click="startAnalysis">开始分析</el-button>
+    </div>
+
+    <template v-else>
     <!-- 数据概要 -->
     <SummaryBar v-if="summary" :summary="summary" />
 
     <!-- 分析结果内容 -->
-    <template v-if="performanceData">
     <!-- 顶部筛选条：时间维度 + 起止期 -->
     <div class="filter-bar">
       <span class="muted">时间维度：</span>
@@ -34,6 +51,14 @@
       <span class="muted">共 {{ filtered.length }} 期</span>
     </div>
 
+    <!-- 空数据提示：筛选后无数据 -->
+    <el-empty
+      v-if="!filtered.length"
+      description="当前时间范围内没有数据，请调整起止期"
+      :image-size="80"
+    />
+
+    <template v-else>
     <!-- 趋势图：保费折线 + 单量柱状双 Y 轴 + 新增客户数小图 -->
     <TrendChart :data="filtered" />
 
@@ -54,12 +79,14 @@
       </el-table>
     </div>
     </template>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import TrendChart from './TrendChart.vue'
 import YearCompare from './YearCompare.vue'
 import SummaryBar from './SummaryBar.vue'
@@ -146,6 +173,11 @@ const filtered = computed(() => {
   return list.slice(Math.min(i, j), Math.max(i, j) + 1)
 })
 
+// 进入结果页后自动加载业绩分析结果（无需手动点击）
+onMounted(() => {
+  startAnalysis()
+})
+
 // 开始分析
 async function startAnalysis() {
   analyzing.value = true
@@ -222,13 +254,47 @@ async function startAnalysis() {
 .dashboard-start-area {
   display: flex;
   justify-content: center;
+  align-items: center;
   padding: 40px 0;
+}
+
+/* 骨架屏 */
+.dashboard-skeleton {
+  padding: 8px 0;
+}
+.skeleton-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+.skeleton-stat {
+  height: 88px;
+}
+.skeleton-chart {
+  height: 320px;
+  margin-bottom: var(--spacing-md);
+}
+.skeleton-chart-half {
+  height: 200px;
+}
+.skeleton-loading-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
   .dashboard-page .chart-card {
     padding: var(--spacing-sm);
+  }
+  .skeleton-row {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

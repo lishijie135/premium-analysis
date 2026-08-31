@@ -1,12 +1,16 @@
 <template>
   <div>
     <h3 class="card-title" style="margin-top: calc(var(--fs-base) * 1)">年度对比</h3>
-    <div class="compare-row">
+    <div v-if="!data.years || !data.years.length" class="year-compare-empty">
+      <el-icon><Calendar /></el-icon>
+      <span class="muted">暂无年度对比数据</span>
+    </div>
+    <div v-else class="compare-row">
       <div class="compare-chart">
-        <div ref="premiumRef" class="chart-box" style="height: 300px"></div>
+        <div ref="premiumRef" class="chart-box"></div>
       </div>
       <div class="compare-chart">
-        <div ref="policiesRef" class="chart-box" style="height: 300px"></div>
+        <div ref="policiesRef" class="chart-box"></div>
       </div>
       <div class="compare-table">
         <div class="table-scroll">
@@ -32,6 +36,7 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
+import { Calendar } from '@element-plus/icons-vue'
 import { fmtPct, pctClass } from '../utils/format'
 
 const props = defineProps({
@@ -91,3 +96,27 @@ onBeforeUnmount(() => {
   policiesChart = null
 })
 </script>
+
+<style scoped>
+.year-compare-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 0;
+  color: var(--color-text-muted);
+}
+.year-compare-empty .el-icon {
+  font-size: 28px;
+}
+.compare-chart .chart-box {
+  width: 100%;
+  height: 300px;
+}
+@media (max-width: 768px) {
+  .compare-chart .chart-box {
+    height: 240px;
+  }
+}
+</style>
