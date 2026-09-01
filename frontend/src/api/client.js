@@ -1,4 +1,5 @@
 import axios from 'axios'
+import JSEncrypt from 'jsencrypt'
 import uploadMock from '../mocks/upload.json'
 import analyzeMock from '../mocks/analyze.json'
 
@@ -15,7 +16,46 @@ const USE_MOCK =
 
 export const isMockMode = () => USE_MOCK
 
+// ---- 登录态（Token）管理 ----
+const TOKEN_KEY = 'pa_token'
+
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || ''
+}
+export function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token)
+  else localStorage.removeItem(TOKEN_KEY)
+}
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY)
+}
+
+// 鉴权失败后由 App 注册回调，统一跳回登录页
+let authFailHandler = null
+export function onAuthFail(fn) {
+  authFailHandler = fn
+}
+
 const http = axios.create({ baseURL: '/api', timeout: 120000 })
+
+// 请求拦截器：自动附加 Bearer Token
+http.interceptors.request.use((config) => {
+  const t = getToken()
+  if (t) config.headers.Authorization = `Bearer ${t}`
+  return config
+})
+
+// 响应拦截器：401（未登录 / Token 失效）统一清除并跳回登录
+http.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response && err.response.status === 401) {
+      clearToken()
+      if (authFailHandler) authFailHandler()
+    }
+    return Promise.reject(err)
+  }
+)
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -288,4 +328,51 @@ export async function activateTemplate(templateId) {
   }
   const { data } = await http.post(`/anomaly/templates/${templateId}/activate`)
   return data
+}
+
+// ---- 登录认证 API ----
+
+let _pubKeyCache = null
+
+/**
+ * 获取 RSA 公钥（带缓存），用于前端加密登录密码。
+ * 后端部署为 HTTP，浏览器 crypto.subtle 在非安全上下文不可用，
+ * 故使用 jsencrypt（纯 JS RSA，PKCS1 v1.5）加密。
+ */
+export async function getRsaPublicKey() {
+  if (_pubKeyCache) return _pubKeyCache
+  const { data } = await http.get('/auth/rsa-public-key')
+  _pubKeyCache = data.public_key
+  return _pubKeyCache
+}
+
+/**
+ * 登录：RSA 加密密码后提交，成功写入 Token。
+ * @param {string} username - 用户名（手机号）
+ * @param {string} password - 明文密码（仅在本地加密，明文不离开浏览器）
+ * @returns {Promise<{token: string, username: string, expires_in: number}>}
+ */
+export async function login(username, password) {
+  const pub = await getRsaPublicKey()
+  const crypt = new JSEncrypt()
+  crypt.setPublicKey(pub)
+  const enc = crypt.encrypt(password)
+  if (!enc) {
+    throw new Error('密码加密失败，请刷新页面重试')
+  }
+  const { data } = await http.post('/auth/login', { username, enc })
+  setToken(data.token)
+  return data
+}
+
+/**
+ * 登出：通知后端（无状态，可选）并清除本地 Token。
+ */
+export async function logout() {
+  try {
+    await http.post('/auth/logout')
+  } catch (e) {
+    // 忽略网络错误，本地清除即可
+  }
+  clearToken()
 }

@@ -1,5 +1,7 @@
 <template>
-  <div class="app-shell">
+  <LoginPage v-if="!authed" @login="handleLogin" />
+
+  <div v-else class="app-shell">
     <!-- 顶部 Header -->
     <header class="app-header">
       <div class="header-left">
@@ -9,6 +11,7 @@
       <div class="header-right">
         <span class="header-subtitle">Premium Analysis System</span>
         <el-tag v-if="mockMode" type="warning" effect="plain" size="small">Mock</el-tag>
+        <el-button v-if="!mockMode" size="small" text bg @click="handleLogout">退出登录</el-button>
       </div>
     </header>
 
@@ -79,14 +82,36 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import UploadPage from './components/UploadPage.vue'
 import MappingStep from './components/MappingStep.vue'
 import ResultPage from './components/ResultPage.vue'
-import { isMockMode } from './api/client'
+import LoginPage from './components/LoginPage.vue'
+import { isMockMode, getToken, setToken, clearToken, logout, onAuthFail } from './api/client'
 
 const mockMode = isMockMode()
+
+// 登录门禁：Mock 模式自动放行；真实后端要求有效 Token
+const authed = ref(mockMode ? true : !!getToken())
+
+function handleLogin(token) {
+  setToken(token)
+  authed.value = true
+}
+
+async function handleLogout() {
+  await logout()
+  authed.value = false
+}
+
+// Token 失效（401）时统一跳回登录页
+onMounted(() => {
+  onAuthFail(() => {
+    clearToken()
+    authed.value = false
+  })
+})
 
 const step = ref(0)
 const uploadResult = ref(null)

@@ -20,7 +20,7 @@ from app.main import app  # 复用已注册好 /api 路由的 app 实例
 
 DIST_DIR = os.environ.get(
     "DIST_DIR",
-    os.path.join(os.path.dirname(__file__), "..", "frontend_dist"),
+    os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"),
 )
 DIST_DIR = os.path.abspath(DIST_DIR)
 INDEX = os.path.join(DIST_DIR, "index.html")
